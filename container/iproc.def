@@ -314,13 +314,20 @@ FSLEOF
         "yaxil==0.13.1" \
         "configparser==3.5.0"
 
-    # Install tedana WITHOUT letting it upgrade numpy/scipy
+    # Install tedana and ALL its deps with numpy/scipy constrained
     pip install --no-deps tedana
-    pip install scikit-learn mapca threadpoolctl joblib nilearn bokeh
+    pip install "numpy==1.25.2" "scipy==1.16.3" \
+        scikit-learn mapca threadpoolctl joblib nilearn bokeh \
+        pybtex pybtex-apa-style robustica seaborn tqdm
 
     # Verify numpy version wasn't overridden
-    echo "  numpy version: $(python3 -c 'import numpy; print(numpy.__version__)')"
+    NP_VER=$(python3 -c 'import numpy; print(numpy.__version__)')
+    echo "  numpy version: ${NP_VER}"
     echo "  scipy version: $(python3 -c 'import scipy; print(scipy.__version__)')"
+    if [[ "$NP_VER" != "1.25.2" ]]; then
+        echo "ERROR: numpy was overridden to ${NP_VER}, expected 1.25.2"
+        exit 1
+    fi
 
     deactivate
 
