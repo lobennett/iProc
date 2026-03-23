@@ -23,7 +23,14 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# When submitted via sbatch, SLURM copies the script to its spool directory.
+# BASH_SOURCE would point there, not to the original location.
+# Use SLURM_SUBMIT_DIR (where sbatch was invoked) if available.
+if [[ -n "${SLURM_SUBMIT_DIR:-}" ]]; then
+    SCRIPT_DIR="${SLURM_SUBMIT_DIR}"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 OUTPUT="${SCRIPT_DIR}/iproc.sif"
 
 echo "============================================"
