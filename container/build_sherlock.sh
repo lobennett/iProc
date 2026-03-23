@@ -62,7 +62,7 @@ export APPTAINER_TMPDIR="${SCRATCH}/.apptainer_tmp"
 mkdir -p "${APPTAINER_TMPDIR}"
 
 cd "${SCRIPT_DIR}"
-apptainer build --fakeroot "${OUTPUT}" iproc.def
+apptainer build --fakeroot --force "${OUTPUT}" iproc.def
 
 # Clean up temp
 rm -rf "${APPTAINER_TMPDIR}"
