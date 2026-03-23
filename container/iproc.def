@@ -1,0 +1,376 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%labels
+    Author Logan Bennett
+    Description iProc v2.6 preprocessing pipeline container
+    Version 1.1.0
+    iProc_Version v2.6.0-beta.3
+
+%help
+    iProc preprocessing pipeline container for neuroimaging data.
+
+    FSL versions installed (closest available to iProc's validated versions):
+      - FSL 4.1.9   (mapped from iProc's 4.0.3 requests)
+      - FSL 5.0.8   (mapped from iProc's 5.0.4 and 5.0.10 requests)
+      - FSL 6.0.7+  (mapped from iProc's 6.0.1 requests, installed via conda)
+
+    Also: FreeSurfer 6.0.0, AFNI 16.3.13, ANTs 2.4.4, Python 3.11 + tedana,
+    GNU Parallel, dcm2niix, ImageMagick, Connectome Workbench 1.3.2.
+
+    Usage:
+      apptainer exec --bind /path/to/data:/data iproc.sif \
+        iProc.py -c /data/config.cfg -s setup --bids /data/bids/sub-XX
+
+# ============================================================================
+# FILES — only the module shim and FreeSurfer license need pre-staging
+# ============================================================================
+%files
+    module_shim.sh /opt/module_shim.sh
+    downloads/license.txt /opt/freesurfer-6.0.0/license.txt
+    # If you have exact FSL versions from Sherlock, uncomment and add:
+    # downloads/fsl-4.0.3.tar.gz /tmp/fsl-sherlock-4.0.3.tar.gz
+    # downloads/fsl-5.0.4.tar.gz /tmp/fsl-sherlock-5.0.4.tar.gz
+    # downloads/fsl-5.0.10.tar.gz /tmp/fsl-sherlock-5.0.10.tar.gz
+
+# ============================================================================
+# POST — install everything
+# ============================================================================
+%post
+    set -eu
+
+    export DEBIAN_FRONTEND=noninteractive
+    export TZ=Etc/UTC
+
+    # ------------------------------------------------------------------
+    # 1. System packages
+    # ------------------------------------------------------------------
+    apt-get update && apt-get install -y --no-install-recommends \
+        bc \
+        bzip2 \
+        ca-certificates \
+        curl \
+        dc \
+        file \
+        gcc \
+        g++ \
+        git \
+        imagemagick \
+        libc6 \
+        libgl1-mesa-glx \
+        libglib2.0-0 \
+        libglu1-mesa \
+        libgomp1 \
+        libice6 \
+        libopenblas-dev \
+        libpng16-16 \
+        libquadmath0 \
+        libsm6 \
+        libx11-6 \
+        libxext6 \
+        libxi6 \
+        libxmu6 \
+        libxrender1 \
+        libxt6 \
+        locales \
+        software-properties-common \
+        tcsh \
+        unzip \
+        wget \
+        xvfb \
+        zlib1g-dev \
+    && locale-gen en_US.UTF-8 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+    # Install Python 3.11 (required: numpy==1.25.2 needs <=3.11, scipy==1.16.3 needs >=3.11)
+    add-apt-repository -y ppa:deadsnakes/ppa
+    apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 \
+        python3.11-dev \
+        python3.11-venv \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+    update-alternatives --install /usr/bin/python  python  /usr/bin/python3.11 1
+
+    # Make /bin/sh point to bash (required for Python subprocess shell=True
+    # to pick up the module shim via BASH_ENV)
+    ln -sf /bin/bash /bin/sh
+
+    # ------------------------------------------------------------------
+    # 2. GNU Parallel 20180522
+    # ------------------------------------------------------------------
+    echo "=== Installing GNU Parallel 20180522 ==="
+    cd /tmp
+    curl -fsSL "https://ftp.gnu.org/gnu/parallel/parallel-20180522.tar.bz2" \
+        -o parallel.tar.bz2
+    tar xjf parallel.tar.bz2
+    cd parallel-20180522
+    ./configure --prefix=/usr/local && make -j"$(nproc)" && make install
+    cd / && rm -rf /tmp/parallel*
+    mkdir -p /root/.parallel && touch /root/.parallel/will-cite
+
+    # ------------------------------------------------------------------
+    # 3. dcm2niix 1.0.20230411
+    # ------------------------------------------------------------------
+    echo "=== Installing dcm2niix ==="
+    cd /tmp
+    curl -fsSL "https://github.com/rordenlab/dcm2niix/releases/download/v1.0.20230411/dcm2niix_lnx.zip" \
+        -o dcm2niix.zip
+    unzip dcm2niix.zip -d /usr/local/bin/
+    chmod +x /usr/local/bin/dcm2niix
+    rm -f dcm2niix.zip
+
+    # ------------------------------------------------------------------
+    # 4. FSL — three installations covering all iProc's version needs
+    # ------------------------------------------------------------------
+    # iProc dynamically switches between FSL 4.0.3, 5.0.4, 5.0.10, 6.0.1.
+    # FSL no longer distributes those exact versions as binaries.
+    # We install the closest available and map via the module shim.
+    #
+    # If you have exact versions from Sherlock (see README), those will be
+    # used instead when placed in downloads/ and the %files lines uncommented.
+
+    # --- FSL 4.1.9 (substitutes for iProc's 4.0.3) ---
+    # Used for: bet2, fslmaths -ero, fugue, sigloss
+    echo "=== Installing FSL 4.1.9 (mapped as 4.0.3) ==="
+    if [[ -f /tmp/fsl-sherlock-4.0.3.tar.gz ]]; then
+        echo "  Using exact 4.0.3 from Sherlock"
+        mkdir -p /opt/fsl-4.0.3
+        tar xzf /tmp/fsl-sherlock-4.0.3.tar.gz -C /opt/fsl-4.0.3 --strip-components=1
+        rm -f /tmp/fsl-sherlock-4.0.3.tar.gz
+    else
+        mkdir -p /opt/fsl-4.1.9
+        cd /tmp
+        curl -fSL "https://fsl.fmrib.ox.ac.uk/fsldownloads/oldversions/fsl-4.1.9-centos5_64.tar.gz" \
+            -o fsl-4.1.9.tar.gz
+        tar xzf fsl-4.1.9.tar.gz -C /opt/fsl-4.1.9 --strip-components=1
+        rm -f fsl-4.1.9.tar.gz
+        # Create symlink so module shim mapping works
+        ln -sf /opt/fsl-4.1.9 /opt/fsl-4.0.3
+    fi
+    # Write fsl.sh config
+    for d in /opt/fsl-4.0.3 /opt/fsl-4.1.9; do
+        if [[ -d "$d" ]] && [[ ! -L "$d" ]]; then
+            mkdir -p "${d}/etc/fslconf"
+            cat > "${d}/etc/fslconf/fsl.sh" <<'FSLEOF'
+FSLDIR=PLACEHOLDER
+FSLOUTPUTTYPE=NIFTI_GZ
+export FSLDIR FSLOUTPUTTYPE
+FSLEOF
+            sed -i "s|PLACEHOLDER|${d}|" "${d}/etc/fslconf/fsl.sh"
+        fi
+    done
+
+    # --- FSL 5.0.8 (substitutes for iProc's 5.0.4 and 5.0.10) ---
+    # Used for: fsl_prepare_fieldmap (5.0.4), and everything else (5.0.10)
+    echo "=== Installing FSL 5.0.8 (mapped as 5.0.4 and 5.0.10) ==="
+    HAVE_SHERLOCK_5=false
+    if [[ -f /tmp/fsl-sherlock-5.0.10.tar.gz ]]; then
+        echo "  Using exact 5.0.10 from Sherlock"
+        mkdir -p /opt/fsl-5.0.10
+        tar xzf /tmp/fsl-sherlock-5.0.10.tar.gz -C /opt/fsl-5.0.10 --strip-components=1
+        rm -f /tmp/fsl-sherlock-5.0.10.tar.gz
+        HAVE_SHERLOCK_5=true
+    fi
+    if [[ -f /tmp/fsl-sherlock-5.0.4.tar.gz ]]; then
+        echo "  Using exact 5.0.4 from Sherlock"
+        mkdir -p /opt/fsl-5.0.4
+        tar xzf /tmp/fsl-sherlock-5.0.4.tar.gz -C /opt/fsl-5.0.4 --strip-components=1
+        rm -f /tmp/fsl-sherlock-5.0.4.tar.gz
+        HAVE_SHERLOCK_5=true
+    fi
+    if [[ "$HAVE_SHERLOCK_5" == "false" ]]; then
+        mkdir -p /opt/fsl-5.0.8
+        cd /tmp
+        curl -fSL "https://fsl.fmrib.ox.ac.uk/fsldownloads/oldversions/fsl-5.0.8-centos6_64.tar.gz" \
+            -o fsl-5.0.8.tar.gz
+        tar xzf fsl-5.0.8.tar.gz -C /opt/fsl-5.0.8 --strip-components=1
+        rm -f fsl-5.0.8.tar.gz
+        ln -sf /opt/fsl-5.0.8 /opt/fsl-5.0.4
+        ln -sf /opt/fsl-5.0.8 /opt/fsl-5.0.10
+    fi
+    for d in /opt/fsl-5.0.4 /opt/fsl-5.0.8 /opt/fsl-5.0.10; do
+        if [[ -d "$d" ]] && [[ ! -L "$d" ]]; then
+            mkdir -p "${d}/etc/fslconf"
+            cat > "${d}/etc/fslconf/fsl.sh" <<'FSLEOF'
+FSLDIR=PLACEHOLDER
+FSLOUTPUTTYPE=NIFTI_GZ
+export FSLDIR FSLOUTPUTTYPE
+FSLEOF
+            sed -i "s|PLACEHOLDER|${d}|" "${d}/etc/fslconf/fsl.sh"
+        fi
+    done
+
+    # --- FSL 6.0.7+ via conda installer (substitutes for iProc's 6.0.1) ---
+    # Used for: topup (spin-echo fieldmaps)
+    echo "=== Installing FSL 6.0.7 via conda installer (mapped as 6.0.1) ==="
+    cd /tmp
+    curl -fsSL "https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/releases/fslinstaller.py" \
+        -o fslinstaller.py
+    python3 fslinstaller.py -d /opt/fsl-6.0.7 --cuda none 2>&1 || true
+    rm -f fslinstaller.py
+    ln -sf /opt/fsl-6.0.7 /opt/fsl-6.0.1
+    if [[ -d /opt/fsl-6.0.7 ]] && [[ ! -L /opt/fsl-6.0.7 ]]; then
+        mkdir -p /opt/fsl-6.0.7/etc/fslconf
+        if [[ ! -f /opt/fsl-6.0.7/etc/fslconf/fsl.sh ]]; then
+            cat > /opt/fsl-6.0.7/etc/fslconf/fsl.sh <<'FSLEOF'
+FSLDIR=/opt/fsl-6.0.7
+FSLOUTPUTTYPE=NIFTI_GZ
+export FSLDIR FSLOUTPUTTYPE
+FSLEOF
+        fi
+    fi
+
+    # ------------------------------------------------------------------
+    # 5. FreeSurfer 6.0.0
+    # ------------------------------------------------------------------
+    echo "=== Installing FreeSurfer 6.0.0 ==="
+    mkdir -p /opt/freesurfer-6.0.0
+    cd /tmp
+    curl -fSL "https://surfer.nmr.mgh.harvard.edu/pub/dist/freesurfer/6.0.0/freesurfer-Linux-centos6_x86_64-stable-pub-v6.0.0.tar.gz" \
+        -o freesurfer.tar.gz
+    tar xzf freesurfer.tar.gz -C /opt/freesurfer-6.0.0 --strip-components=1
+    rm -f freesurfer.tar.gz
+    # license.txt already copied via %files
+
+    # ------------------------------------------------------------------
+    # 6. AFNI 16.3.13
+    # ------------------------------------------------------------------
+    echo "=== Installing AFNI 16.3.13 ==="
+    mkdir -p /opt/afni
+    cd /tmp
+    curl -fSL "https://afni.nimh.nih.gov/pub/dist/tgz/AFNI_ARCHIVE/AFNI_16.3.13.tgz" \
+        -o afni.tgz
+    tar xzf afni.tgz -C /opt/afni --strip-components=1
+    rm -f afni.tgz
+
+    # ------------------------------------------------------------------
+    # 7. ANTs 2.4.4
+    # ------------------------------------------------------------------
+    echo "=== Installing ANTs 2.4.4 ==="
+    mkdir -p /opt/ants
+    cd /tmp
+    curl -fSL "https://github.com/ANTsX/ANTs/releases/download/v2.4.4/ants-2.4.4-ubuntu-22.04-X64-gcc.zip" \
+        -o ants.zip
+    unzip ants.zip -d /opt/ants-tmp
+    # ANTs releases have varying directory structures; flatten to /opt/ants
+    if [[ -d /opt/ants-tmp/ants-2.4.4 ]]; then
+        cp -a /opt/ants-tmp/ants-2.4.4/* /opt/ants/
+    else
+        cp -a /opt/ants-tmp/*/* /opt/ants/ 2>/dev/null || cp -a /opt/ants-tmp/* /opt/ants/
+    fi
+    rm -rf /opt/ants-tmp ants.zip
+
+    # ------------------------------------------------------------------
+    # 8. Connectome Workbench (v2.1.0 — v1.3.2 no longer distributed)
+    #    Note: wb_command is not actively used by iProc but included
+    #    for potential future use and general neuroimaging utility.
+    # ------------------------------------------------------------------
+    echo "=== Installing Connectome Workbench 2.1.0 ==="
+    cd /tmp
+    curl -fSL "https://www.humanconnectome.org/storage/app/media/workbench/workbench-linux64-v2.1.0.zip" \
+        -o workbench.zip
+    unzip workbench.zip -d /opt/
+    rm -f workbench.zip
+
+    # ------------------------------------------------------------------
+    # 9. MRIcroGL
+    # ------------------------------------------------------------------
+    echo "=== Installing MRIcroGL ==="
+    cd /tmp
+    curl -fSL "https://github.com/rordenlab/MRIcroGL/releases/download/v1.2.20190902/MRIcroGL_linux.zip" \
+        -o mricrogl.zip
+    unzip mricrogl.zip -d /opt/
+    rm -f mricrogl.zip
+
+    # ------------------------------------------------------------------
+    # 10. Python virtual environment + iProc deps + tedana
+    # ------------------------------------------------------------------
+    echo "=== Setting up Python environment ==="
+    python3.11 -m venv /opt/iproc-venv
+    . /opt/iproc-venv/bin/activate
+    pip install --upgrade pip setuptools wheel
+
+    pip install \
+        "nibabel==5.3.3" \
+        "texttable==0.8.4" \
+        "paramiko==3.3.1" \
+        "numpy==1.25.2" \
+        "scipy==1.16.3" \
+        "matplotlib==3.10.8" \
+        "PyYAML==5.2" \
+        "yaxil==0.13.1" \
+        "configparser==3.5.0"
+
+    pip install tedana
+
+    deactivate
+
+    # ------------------------------------------------------------------
+    # 11. Module shim setup
+    # ------------------------------------------------------------------
+    chmod +x /opt/module_shim.sh
+    cp /opt/module_shim.sh /etc/profile.d/module_shim.sh
+
+    # ------------------------------------------------------------------
+    # 12. Create bind-mount points for Sherlock HPC
+    # ------------------------------------------------------------------
+    mkdir -p /scratch /oak /data /bids /home
+
+    echo "=== Build complete ==="
+
+# ============================================================================
+# ENVIRONMENT
+# ============================================================================
+%environment
+    export LC_ALL=en_US.UTF-8
+    export LANG=en_US.UTF-8
+
+    # Module shim for non-interactive shells (Python subprocess)
+    export BASH_ENV=/opt/module_shim.sh
+
+    # Default FSL (5.0.8 or 5.0.10 mapped as iProc's baseline)
+    export FSLDIR=/opt/fsl-5.0.10
+    export FSLOUTPUTTYPE=NIFTI_GZ
+    export FSLMULTIFILEQUIT=TRUE
+
+    # FreeSurfer
+    export FREESURFER_HOME=/opt/freesurfer-6.0.0
+    export SUBJECTS_DIR=/opt/freesurfer-6.0.0/subjects
+    export FS_LICENSE=/opt/freesurfer-6.0.0/license.txt
+
+    # AFNI
+    export AFNI_HOME=/opt/afni
+
+    # ANTs
+    export ANTSPATH=/opt/ants/bin
+    export ANTS_HOME=/opt/ants
+
+    # Connectome Workbench
+    export CARET7DIR=/opt/workbench/bin_linux64
+
+    # Python venv
+    export VIRTUAL_ENV=/opt/iproc-venv
+
+    # PATH (FSLDIR/bin gets swapped by module shim at runtime)
+    export PATH="/opt/iproc-venv/bin:${FSLDIR}/bin:${FREESURFER_HOME}/bin:${AFNI_HOME}:${ANTSPATH}:${CARET7DIR}:/opt/MRIcroGL:/usr/local/bin:/usr/bin:/bin"
+
+    export PARALLEL_HOME=/tmp/.parallel
+
+# ============================================================================
+# RUNSCRIPT
+# ============================================================================
+%runscript
+    source /opt/module_shim.sh
+    source ${FREESURFER_HOME}/SetUpFreeSurfer.sh 2>/dev/null || true
+    source /opt/iproc-venv/bin/activate
+    mkdir -p /tmp/.parallel && touch /tmp/.parallel/will-cite
+    exec "$@"
+
+# ============================================================================
+# STARTSCRIPT
+# ============================================================================
+%startscript
+    source /opt/module_shim.sh
+    source ${FREESURFER_HOME}/SetUpFreeSurfer.sh 2>/dev/null || true
+    source /opt/iproc-venv/bin/activate
