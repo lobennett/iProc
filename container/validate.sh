@@ -8,6 +8,12 @@
 #   $ bash validate.sh
 set -u
 
+# Ensure FSLDIR has a default before module shim sets it
+export FSLDIR="${FSLDIR:-/opt/fsl-5.0.10}"
+export FREESURFER_HOME="${FREESURFER_HOME:-/opt/freesurfer-6.0.0}"
+export FS_LICENSE="${FS_LICENSE:-/opt/freesurfer-6.0.0/license.txt}"
+export BASH_ENV="${BASH_ENV:-/opt/module_shim.sh}"
+
 PASS=0
 FAIL=0
 WARN=0
