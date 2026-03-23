@@ -98,16 +98,11 @@ From: ubuntu:22.04
     ln -sf /bin/bash /bin/sh
 
     # ------------------------------------------------------------------
-    # 2. GNU Parallel 20180522
+    # 2. GNU Parallel (use apt package — building from source fails in fakeroot)
     # ------------------------------------------------------------------
-    echo "=== Installing GNU Parallel 20180522 ==="
-    cd /tmp
-    curl -fsSL "https://ftp.gnu.org/gnu/parallel/parallel-20180522.tar.bz2" \
-        -o parallel.tar.bz2
-    tar xjf parallel.tar.bz2
-    cd parallel-20180522
-    ./configure --prefix=/usr/local && make -j"$(nproc)" && make install
-    cd / && rm -rf /tmp/parallel*
+    echo "=== Installing GNU Parallel ==="
+    apt-get update && apt-get install -y --no-install-recommends parallel \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
     mkdir -p /root/.parallel && touch /root/.parallel/will-cite
 
     # ------------------------------------------------------------------
@@ -183,9 +178,19 @@ FSLEOF
     if [[ "$HAVE_SHERLOCK_5" == "false" ]]; then
         mkdir -p /opt/fsl-5.0.8
         cd /tmp
-        curl -fSL "https://fsl.fmrib.ox.ac.uk/fsldownloads/oldversions/fsl-5.0.8-centos6_64.tar.gz" \
+        echo "  Downloading FSL 5.0.8 (~1.5GB, may take several minutes)..."
+        curl --retry 3 --retry-delay 10 -fSL --connect-timeout 30 --max-time 1800 \
+            "https://fsl.fmrib.ox.ac.uk/fsldownloads/oldversions/fsl-5.0.8-centos6_64.tar.gz" \
             -o fsl-5.0.8.tar.gz
+        echo "  Download complete ($(du -h fsl-5.0.8.tar.gz | cut -f1)). Extracting..."
         tar xzf fsl-5.0.8.tar.gz -C /opt/fsl-5.0.8 --strip-components=1
+        # Verify extraction succeeded
+        if [[ ! -f /opt/fsl-5.0.8/bin/fslmaths ]]; then
+            echo "ERROR: FSL 5.0.8 extraction failed — /opt/fsl-5.0.8/bin/fslmaths not found"
+            ls -la /opt/fsl-5.0.8/ || true
+            exit 1
+        fi
+        echo "  FSL 5.0.8 installed: $(ls /opt/fsl-5.0.8/bin/ | wc -l) binaries"
         rm -f fsl-5.0.8.tar.gz
         ln -sf /opt/fsl-5.0.8 /opt/fsl-5.0.4
         ln -sf /opt/fsl-5.0.8 /opt/fsl-5.0.10
@@ -235,15 +240,19 @@ FSLEOF
     # license.txt already copied via %files
 
     # ------------------------------------------------------------------
-    # 6. AFNI 16.3.13
+    # 6. AFNI (pre-built binaries)
     # ------------------------------------------------------------------
-    echo "=== Installing AFNI 16.3.13 ==="
+    # Note: AFNI_ARCHIVE/AFNI_16.3.13.tgz is SOURCE CODE, not binaries.
+    # Use the pre-built binary distribution instead (latest stable).
+    # iProc only uses 3dTproject and 3dAFNItoNIFTI, which are stable across versions.
+    echo "=== Installing AFNI (pre-built binaries) ==="
     mkdir -p /opt/afni
     cd /tmp
-    curl -fSL "https://afni.nimh.nih.gov/pub/dist/tgz/AFNI_ARCHIVE/AFNI_16.3.13.tgz" \
+    curl --retry 3 -fSL "https://afni.nimh.nih.gov/pub/dist/tgz/linux_openmp_64.tgz" \
         -o afni.tgz
     tar xzf afni.tgz -C /opt/afni --strip-components=1
     rm -f afni.tgz
+    echo "  AFNI installed: $(ls /opt/afni/ | wc -l) files"
 
     # ------------------------------------------------------------------
     # 7. ANTs 2.4.4
@@ -292,18 +301,26 @@ FSLEOF
     . /opt/iproc-venv/bin/activate
     pip install --upgrade pip setuptools wheel
 
+    # Install numpy and scipy first with exact pins
+    pip install "numpy==1.25.2" "scipy==1.16.3"
+
+    # Install remaining iProc dependencies
     pip install \
         "nibabel==5.3.3" \
         "texttable==0.8.4" \
         "paramiko==3.3.1" \
-        "numpy==1.25.2" \
-        "scipy==1.16.3" \
         "matplotlib==3.10.8" \
         "PyYAML==5.2" \
         "yaxil==0.13.1" \
         "configparser==3.5.0"
 
-    pip install tedana
+    # Install tedana WITHOUT letting it upgrade numpy/scipy
+    pip install --no-deps tedana
+    pip install scikit-learn mapca threadpoolctl joblib nilearn bokeh
+
+    # Verify numpy version wasn't overridden
+    echo "  numpy version: $(python3 -c 'import numpy; print(numpy.__version__)')"
+    echo "  scipy version: $(python3 -c 'import scipy; print(scipy.__version__)')"
 
     deactivate
 
