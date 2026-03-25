@@ -8,12 +8,15 @@
 bids_generate.py — Generate iProc configuration files from a BIDS manifest.
 
 Usage:
-    uv run bids_generate.py manifest.yaml --iproc-dir /path/to/iProc
+    uv run bids_generate.py manifest.yaml \
+        --iproc-dir /path/to/derivatives/iproc \
+        --codedir /path/to/iProc
 
 Reads the manifest produced by bids_discover.py and generates:
   1. configs/tasktype_consolidated.csv
   2. mri_data/{sub}/subject_lists/scanlist_{sub}.csv  (per subject)
   3. mri_data/{sub}/subject_lists/{sub}.cfg            (per subject)
+  4. Patched JSON sidecars for fieldmaps and T1w missing metadata
 
 The manifest should be reviewed/edited before running this script.
 """
@@ -21,7 +24,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import io
+import json
 import logging
 import re
 import sys
@@ -32,15 +35,6 @@ import yaml
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Sanitization (match iProc's BIDS session ID logic)
-# ---------------------------------------------------------------------------
-
-def sanitize(s: str) -> str:
-    """Remove non-alphanumeric chars for iProc session IDs."""
-    return re.sub(r"[^a-zA-Z0-9]", "", str(s))
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +65,94 @@ def generate_tasktype_csv(tasks: dict, output_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Patch JSON sidecars
+# ---------------------------------------------------------------------------
+
+def patch_json_sidecars(
+    bids_root: Path,
+    sub_data: dict,
+    echo_time_diff: float,
+) -> int:
+    """Generate/patch JSON sidecars for files missing required iProc metadata.
+
+    Writes patched JSONs alongside existing NIfTI files. Existing JSON content
+    is preserved — only missing fields are added.
+
+    Returns the number of files patched.
+    """
+    patched = 0
+
+    for ses_label, ses_data in sub_data["sessions"].items():
+        # Patch fieldmap magnitude JSONs
+        for fmap in ses_data["fmap_mag"]:
+            nii_path = bids_root / fmap["file"]
+            json_path = nii_path.parent / nii_path.name.replace(".nii.gz", ".json")
+
+            existing = {}
+            if json_path.exists():
+                with open(json_path) as f:
+                    existing = json.load(f)
+
+            needs_write = False
+            if "SeriesNumber" not in existing:
+                existing["SeriesNumber"] = fmap["series_number"]
+                needs_write = True
+
+            if needs_write:
+                with open(json_path, "w") as f:
+                    json.dump(existing, f, indent=4)
+                    f.write("\n")
+                patched += 1
+
+        # Patch fieldmap phase/phasediff JSONs
+        for fmap in ses_data["fmap_phase"]:
+            nii_path = bids_root / fmap["file"]
+            json_path = nii_path.parent / nii_path.name.replace(".nii.gz", ".json")
+
+            existing = {}
+            if json_path.exists():
+                with open(json_path) as f:
+                    existing = json.load(f)
+
+            needs_write = False
+            if "SeriesNumber" not in existing:
+                existing["SeriesNumber"] = fmap["series_number"]
+                needs_write = True
+            if "EchoTimeDifference" not in existing:
+                existing["EchoTimeDifference"] = echo_time_diff
+                needs_write = True
+
+            if needs_write:
+                with open(json_path, "w") as f:
+                    json.dump(existing, f, indent=4)
+                    f.write("\n")
+                patched += 1
+
+        # Patch T1w JSONs
+        for anat in ses_data["anat"]:
+            nii_path = bids_root / anat["file"]
+            json_path = nii_path.parent / nii_path.name.replace(".nii.gz", ".json")
+
+            existing = {}
+            if json_path.exists():
+                with open(json_path) as f:
+                    existing = json.load(f)
+
+            needs_write = False
+            if "SeriesNumber" not in existing:
+                existing["SeriesNumber"] = anat["series_number"]
+                needs_write = True
+
+            if needs_write:
+                with open(json_path, "w") as f:
+                    json.dump(existing, f, indent=4)
+                    f.write("\n")
+                patched += 1
+
+    return patched
+
+
+# ---------------------------------------------------------------------------
 # Generate scanlist CSV
 # ---------------------------------------------------------------------------
 
@@ -83,7 +165,6 @@ SCANLIST_COLUMNS = [
 
 def generate_scanlist_csv(
     sub_data: dict,
-    iproc_dir: Path,
     output_path: Path,
 ) -> None:
     """Write scanlist_{sub}.csv for one subject."""
@@ -102,22 +183,22 @@ def generate_scanlist_csv(
         fmaps_phase = ses_data["fmap_phase"]
         anats = ses_data["anat"]
 
-        # Determine fieldmap SeriesNumbers for this session
         fmap_mag_sn = fmaps_mag[0]["series_number"] if fmaps_mag else 0
         fmap_phase_sn = fmaps_phase[0]["series_number"] if fmaps_phase else 0
 
-        # Determine anatomical SeriesNumber (only if this is the T1 session)
         anat_sn = 0
         if t1_sel and t1_sel["session"] == ses_label:
             anat_sn = t1_sel["series_number"]
 
-        # ANAT row (one per session that has a T1)
+        # ANAT rows
         if anats:
             for anat in anats:
+                is_selected = (t1_sel and t1_sel["session"] == ses_label
+                               and anat["run"] == t1_sel["run"])
                 rows.append({
                     "SUBJID": sub_label,
                     "SESSION_ID": ses_label,
-                    "Analyze": 1 if (t1_sel and t1_sel["session"] == ses_label and anat["run"] == t1_sel["run"]) else 0,
+                    "Analyze": 1 if is_selected else 0,
                     "BLD": 0,
                     "TYPE": "ANAT",
                     "ANAT": anat["series_number"],
@@ -130,12 +211,12 @@ def generate_scanlist_csv(
                 })
 
         # BOLD rows
-        analyze = 1 if (fmap_mag_sn and fmap_phase_sn) else 0
+        has_fmap = bool(fmap_mag_sn and fmap_phase_sn)
         for bold in bolds:
             rows.append({
                 "SUBJID": sub_label,
                 "SESSION_ID": ses_label,
-                "Analyze": analyze,
+                "Analyze": 1 if has_fmap else 0,
                 "BLD": bold["series_number"],
                 "TYPE": bold["task"].upper(),
                 "ANAT": anat_sn,
@@ -147,7 +228,7 @@ def generate_scanlist_csv(
                 "T2_SESSION_ID": 0,
             })
 
-        # FMAP row (one per fieldmap pair per session)
+        # FMAP rows
         if fmaps_mag and fmaps_phase:
             rows.append({
                 "SUBJID": sub_label,
@@ -185,7 +266,7 @@ LOGDIR=${{outdir}}/${{sub}}/logs
 SCRATCHDIR=${{basedir}}/scratch/
 MASKSDIR=${{basedir}}/mni_masks
 FONT=Nimbus-Sans-Regular
-CODEDIR={basedir}
+CODEDIR={codedir}
 
 [template]
 MIDVOL_SESS={midvol_sess}
@@ -226,6 +307,7 @@ FS6={freesurfer_home}/subjects/fsaverage6
 def generate_subject_config(
     sub_data: dict,
     iproc_dir: Path,
+    codedir: str,
     output_path: Path,
     resolution: int,
     fsldir: str,
@@ -244,6 +326,7 @@ def generate_subject_config(
     cfg = CFG_TEMPLATE.format(
         sub=sub_label,
         basedir=str(iproc_dir),
+        codedir=codedir,
         midvol_sess=midvol["session"] if midvol else "UNKNOWN",
         midvol_boldno=midvol["bold_series_number"] if midvol else 0,
         midvol_volno=midvol["volume"] if midvol else 100,
@@ -269,12 +352,15 @@ def generate_subject_config(
 def generate_all(
     manifest: dict,
     iproc_dir: Path,
+    codedir: str,
     fsldir: str,
     freesurfer_home: str,
 ) -> None:
     """Generate all iProc config files from the manifest."""
     iproc_dir = iproc_dir.resolve()
     resolution = manifest["study"]["resolution"]
+    echo_time_diff = manifest["study"].get("echo_time_diff", 0.002272)
+    bids_root = Path(manifest["study"]["bids_root"])
 
     # 1. tasktype_consolidated.csv
     log.info("=== Generating tasktype_consolidated.csv ===")
@@ -288,17 +374,24 @@ def generate_all(
         sub_label = sub_data["sub_label"]
         log.info("=== Generating config for %s ===", sub_name)
 
+        # 2a. Patch JSON sidecars in the BIDS directory
+        n_patched = patch_json_sidecars(bids_root, sub_data, echo_time_diff)
+        if n_patched:
+            log.info("  Patched %d JSON sidecar(s) in BIDS directory", n_patched)
+
         sub_lists_dir = iproc_dir / "mri_data" / sub_label / "subject_lists"
 
+        # 2b. Scanlist CSV
         generate_scanlist_csv(
             sub_data,
-            iproc_dir,
             sub_lists_dir / f"scanlist_{sub_label}.csv",
         )
 
+        # 2c. Subject config
         generate_subject_config(
             sub_data,
             iproc_dir,
+            codedir,
             sub_lists_dir / f"{sub_label}.cfg",
             resolution=resolution,
             fsldir=fsldir,
@@ -324,7 +417,9 @@ def main():
     )
     parser.add_argument("manifest", type=Path, help="Path to manifest.yaml from bids_discover.py")
     parser.add_argument("--iproc-dir", type=Path, required=True,
-                        help="Path to iProc installation directory")
+                        help="Path to iProc output/derivatives directory")
+    parser.add_argument("--codedir", type=str, default=None,
+                        help="Path to iProc code directory (default: $SCRATCH/iProc or same as --iproc-dir)")
     parser.add_argument("--fsldir", type=str, default="/opt/fsl-5.0.10",
                         help="FSLDIR path (default: /opt/fsl-5.0.10 for container)")
     parser.add_argument("--freesurfer-home", type=str, default="/opt/freesurfer-6.0.0",
@@ -336,12 +431,15 @@ def main():
         log.error("Manifest not found: %s", args.manifest)
         sys.exit(1)
 
+    codedir = args.codedir or str(args.iproc_dir)
+
     with open(args.manifest) as f:
         manifest = yaml.safe_load(f)
 
     generate_all(
         manifest,
         args.iproc_dir,
+        codedir=codedir,
         fsldir=args.fsldir,
         freesurfer_home=args.freesurfer_home,
     )

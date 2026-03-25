@@ -13,8 +13,9 @@ Usage:
     uv run bids_discover.py /path/to/bids_root \
         --output manifest.yaml \
         --skip 7 \
-        --smoothing 6 \
-        --resolution 222
+        --smoothing 0 \
+        --resolution 111 \
+        --echo-time-diff 0.002272
 
 The manifest is the checkpoint between discovery and generation.
 Review it, edit T1 selections or exclude sessions, then pass to bids_generate.py.
@@ -73,13 +74,9 @@ ANAT_RE = re.compile(
 
 def read_json(nii_path: Path) -> dict:
     """Read the JSON sidecar for a NIfTI file."""
-    json_path = nii_path.with_suffix("").with_suffix(".json")
+    name = nii_path.name.replace(".nii.gz", ".json")
+    json_path = nii_path.parent / name
     if not json_path.exists():
-        # Handle .nii.gz → .json
-        name = nii_path.name.replace(".nii.gz", ".json")
-        json_path = nii_path.parent / name
-    if not json_path.exists():
-        log.warning("No JSON sidecar for %s", nii_path.name)
         return {}
     with open(json_path) as f:
         return json.load(f)
@@ -96,17 +93,38 @@ def get_nvols(nii_path: Path) -> int:
         return 0
 
 
+def get_descrip_te(nii_path: Path) -> float | None:
+    """Extract TE from NIfTI descrip field (e.g. 'te=9.10;...')."""
+    try:
+        img = nib.load(str(nii_path))
+        descrip = img.header["descrip"].item()
+        if isinstance(descrip, bytes):
+            descrip = descrip.decode("utf-8", errors="ignore")
+        m = re.search(r"te=([0-9.]+)", descrip, re.IGNORECASE)
+        if m:
+            return float(m.group(1)) / 1000.0  # ms → seconds
+    except Exception:
+        pass
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Discovery
 # ---------------------------------------------------------------------------
 
-def discover_subject(bids_root: Path, sub_dir: Path, skip: int, smoothing: float) -> dict:
+def discover_subject(
+    bids_root: Path,
+    sub_dir: Path,
+    skip: int,
+    smoothing: float,
+    echo_time_diff: float,
+) -> dict:
     """Discover all sessions, tasks, fieldmaps, and anatomicals for one subject."""
-    sub_id = sub_dir.name  # e.g. "sub-s03"
+    sub_id = sub_dir.name
     sub_label = sub_id.replace("sub-", "")
 
     sessions: dict[str, dict] = {}
-    task_params: dict[str, dict] = {}  # task_name → {tr, nvols, nechos, ...}
+    task_params: dict[str, dict] = {}
 
     for ses_dir in sorted(sub_dir.iterdir()):
         if not ses_dir.is_dir() or not ses_dir.name.startswith("ses-"):
@@ -120,19 +138,12 @@ def discover_subject(bids_root: Path, sub_dir: Path, skip: int, smoothing: float
             "fmap_phase": [],
         }
 
-        # --- Anatomicals ---
-        anat_dir = ses_dir / "anat"
-        if anat_dir.is_dir():
-            for f in sorted(anat_dir.glob("*.nii.gz")):
-                m = ANAT_RE.match(f.name)
-                if not m:
-                    continue
-                js = read_json(f)
-                ses_data["anat"].append({
-                    "file": str(f.relative_to(bids_root)),
-                    "run": int(m.group("run") or 1),
-                    "series_number": js.get("SeriesNumber", 0),
-                })
+        # We assign synthetic SeriesNumbers based on scan order within each
+        # session. iProc uses these as identifiers in the CSV — the actual
+        # values don't matter as long as they're consistent and unique per
+        # session. We use: fmap_mag=2, fmap_phase=3, anat=50+run,
+        # bold=series_number_from_json OR sequential assignment starting at 4.
+        sn_counter = 4  # start after fmap slots
 
         # --- Fieldmaps ---
         fmap_dir = ses_dir / "fmap"
@@ -143,24 +154,51 @@ def discover_subject(bids_root: Path, sub_dir: Path, skip: int, smoothing: float
 
                 if mag_m:
                     js = read_json(f)
+                    sn = js.get("SeriesNumber", 2)
                     ses_data["fmap_mag"].append({
                         "file": str(f.relative_to(bids_root)),
                         "run": int(mag_m.group("run") or 1),
-                        "series_number": js.get("SeriesNumber", 0),
+                        "series_number": sn,
                     })
                 elif phase_m:
                     js = read_json(f)
+                    sn = js.get("SeriesNumber", 3)
+                    te_diff = js.get("EchoTimeDifference", echo_time_diff)
                     ses_data["fmap_phase"].append({
                         "file": str(f.relative_to(bids_root)),
                         "run": int(phase_m.group("run") or 1),
-                        "series_number": js.get("SeriesNumber", 0),
-                        "echo_time_diff": js.get("EchoTimeDifference", None),
+                        "series_number": sn,
+                        "echo_time_diff": te_diff,
                     })
+
+            # Ensure mag and phase SeriesNumbers are consistent
+            # (phase must be mag+1 for iProc's fsl_prepare_fieldmap constraint)
+            if ses_data["fmap_mag"] and ses_data["fmap_phase"]:
+                mag_sn = ses_data["fmap_mag"][0]["series_number"]
+                phase_sn = ses_data["fmap_phase"][0]["series_number"]
+                if phase_sn - mag_sn not in (1, 2):
+                    ses_data["fmap_mag"][0]["series_number"] = 2
+                    ses_data["fmap_phase"][0]["series_number"] = 3
+
+        # --- Anatomicals ---
+        anat_dir = ses_dir / "anat"
+        if anat_dir.is_dir():
+            for f in sorted(anat_dir.glob("*.nii.gz")):
+                m = ANAT_RE.match(f.name)
+                if not m:
+                    continue
+                js = read_json(f)
+                run = int(m.group("run") or 1)
+                sn = js.get("SeriesNumber", 50 + run)
+                ses_data["anat"].append({
+                    "file": str(f.relative_to(bids_root)),
+                    "run": run,
+                    "series_number": sn,
+                })
 
         # --- Functional ---
         func_dir = ses_dir / "func"
         if func_dir.is_dir():
-            # Group by task+run to count echoes
             task_run_echoes: dict[str, list] = defaultdict(list)
 
             for f in sorted(func_dir.glob("*_bold.nii.gz")):
@@ -192,7 +230,8 @@ def discover_subject(bids_root: Path, sub_dir: Path, skip: int, smoothing: float
                 nvols = max(0, nvols_total - skip)
                 nechos = len(echoes)
 
-                series_number = js.get("SeriesNumber", 0)
+                series_number = js.get("SeriesNumber", sn_counter)
+                sn_counter = max(sn_counter, series_number) + 1
                 tr = js.get("RepetitionTime", 0)
                 echo_time = js.get("EchoTime", 0)
                 eff_echo_spacing = js.get("EffectiveEchoSpacing", 0)
@@ -211,7 +250,6 @@ def discover_subject(bids_root: Path, sub_dir: Path, skip: int, smoothing: float
                     "phase_encoding_direction": phase_dir,
                 })
 
-                # Accumulate task parameters (use first occurrence as canonical)
                 task_upper = task.upper()
                 if task_upper not in task_params:
                     task_params[task_upper] = {
@@ -230,7 +268,6 @@ def discover_subject(bids_root: Path, sub_dir: Path, skip: int, smoothing: float
     for ses_label in sorted(sessions.keys(), reverse=True):
         anats = sessions[ses_label]["anat"]
         if anats:
-            # If multiple T1s in same session, pick last run
             best = sorted(anats, key=lambda a: a["run"])[-1]
             t1_selection = {
                 "session": ses_label,
@@ -279,6 +316,7 @@ def discover_subject(bids_root: Path, sub_dir: Path, skip: int, smoothing: float
         "t1_selection": t1_selection,
         "midvol": midvol,
         "fieldmap_type": fmap_type or "fsl_prepare_fieldmap",
+        "echo_time_diff": echo_time_diff,
     }
 
 
@@ -287,6 +325,7 @@ def discover_dataset(
     skip: int,
     smoothing: float,
     resolution: int,
+    echo_time_diff: float,
     subjects: list[str] | None = None,
 ) -> dict:
     """Discover the entire BIDS dataset."""
@@ -315,10 +354,9 @@ def discover_dataset(
 
     for sub_dir in sub_dirs:
         log.info("Discovering %s ...", sub_dir.name)
-        sub_data = discover_subject(bids_root, sub_dir, skip, smoothing)
+        sub_data = discover_subject(bids_root, sub_dir, skip, smoothing, echo_time_diff)
         all_subjects[sub_dir.name] = sub_data
 
-        # Merge task params (first occurrence wins)
         for task_name, params in sub_data["task_params"].items():
             if task_name not in all_tasks:
                 all_tasks[task_name] = params
@@ -337,6 +375,8 @@ def discover_dataset(
                 "skip_volumes": f"{skip} dummy scans discarded from start of each functional run",
                 "smoothing": f"{smoothing}mm FWHM (use 0 for surface-only analysis)",
                 "resolution": f"{'1mm' if resolution == 111 else '2mm'} isotropic output template",
+                "echo_time_diff": f"{echo_time_diff}s ({echo_time_diff * 1000:.3f}ms) for fsl_prepare_fieldmap",
+                "series_numbers": "Synthetic SeriesNumbers assigned when JSON sidecars lack them (fmap_mag=2, fmap_phase=3, anat=50+run, bold=from JSON or sequential)",
             },
         },
         "study": {
@@ -344,6 +384,7 @@ def discover_dataset(
             "resolution": resolution,
             "default_smoothing": smoothing,
             "default_skip": skip,
+            "echo_time_diff": echo_time_diff,
         },
         "tasks": all_tasks,
         "subjects": all_subjects,
@@ -379,18 +420,6 @@ def validate_manifest(manifest: dict) -> list[str]:
                     f"but no fieldmap (mag={len(fmaps_mag)}, phase={len(fmaps_phase)})"
                 )
 
-            # Check SeriesNumber consistency for fieldmaps
-            if fmaps_mag and fmaps_phase:
-                mag_sn = fmaps_mag[0]["series_number"]
-                phase_sn = fmaps_phase[0]["series_number"]
-                diff = phase_sn - mag_sn
-                if diff not in (1, 2) and mag_sn != 0 and phase_sn != 0:
-                    warnings.append(
-                        f"{sub_name}/ses-{ses_label}: Fieldmap phase SeriesNumber ({phase_sn}) "
-                        f"is not magnitude+1 or +2 ({mag_sn}). iProc may reject this."
-                    )
-
-            # Check task consistency
             for bold in bolds:
                 task_upper = bold["task"].upper()
                 if task_upper not in manifest["tasks"]:
@@ -426,6 +455,8 @@ def main():
                         help="Smoothing kernel FWHM in mm (default: 6.0)")
     parser.add_argument("--resolution", type=int, choices=[111, 222], default=222,
                         help="Output resolution: 111=1mm, 222=2mm (default: 222)")
+    parser.add_argument("--echo-time-diff", type=float, default=0.002272,
+                        help="Fieldmap echo time difference in seconds (default: 0.002272 = 2.272ms, GE CNI standard)")
     parser.add_argument("--subjects", nargs="+", default=None,
                         help="Process only these subjects (e.g. sub-s03 sub-s04)")
 
@@ -436,17 +467,16 @@ def main():
         skip=args.skip,
         smoothing=args.smoothing,
         resolution=args.resolution,
+        echo_time_diff=args.echo_time_diff,
         subjects=args.subjects,
     )
 
-    # Validate
     warnings = validate_manifest(manifest)
     if warnings:
         log.warning("=== Validation Warnings ===")
         for w in warnings:
             log.warning("  %s", w)
 
-    # Write manifest
     with open(args.output, "w") as f:
         yaml.dump(manifest, f, default_flow_style=False, sort_keys=False, width=120)
 
