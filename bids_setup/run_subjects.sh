@@ -137,13 +137,16 @@ for sub in "${SUBJECTS[@]}"; do
         --mem=${MEM} \
         --cpus-per-task=${CPUS} \
         --output=${LOG_DIR}/slurm_${STAGE}_%j.log \
+        --error=${LOG_DIR}/slurm_${STAGE}_%j.err \
         --wrap=\"apptainer exec \
             --bind /oak:/oak,/scratch:/scratch \
             ${CONTAINER} \
-            bash -c 'source /opt/iproc-venv/bin/activate && \
+            bash -c 'set -e && \
+                     source /opt/iproc-venv/bin/activate && \
                      cd ${IPROC_CODE} && \
-                     pip install -e . 2>/dev/null && \
+                     pip install -e . 2>&1 | tail -1 && \
                      mkdir -p ${LOG_DIR} && \
+                     echo Running: python iProc.py -c ${CONFIG} -s ${STAGE} ${BIDS_FLAG} --executor local && \
                      python iProc.py -c ${CONFIG} -s ${STAGE} ${BIDS_FLAG} --executor local'\""
 
     if [[ "$DRY_RUN" == "true" ]]; then
