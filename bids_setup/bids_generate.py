@@ -158,7 +158,7 @@ def patch_json_sidecars(
 
 SCANLIST_COLUMNS = [
     "SUBJID", "SESSION_ID", "Analyze", "BLD", "TYPE", "ANAT",
-    "FMAP_MAG", "FMAP_PHASE", "FMAP_APLR", "FMAP_PARL",
+    "FMAP_MAG", "FMAP_PHASE", "FMAP_AP", "FMAP_PA",
     "T2", "T2_SESSION_ID",
 ]
 
@@ -204,8 +204,8 @@ def generate_scanlist_csv(
                     "ANAT": anat["series_number"],
                     "FMAP_MAG": 0,
                     "FMAP_PHASE": 0,
-                    "FMAP_APLR": 0,
-                    "FMAP_PARL": 0,
+                    "FMAP_AP": 0,
+                    "FMAP_PA": 0,
                     "T2": 0,
                     "T2_SESSION_ID": 0,
                 })
@@ -222,8 +222,8 @@ def generate_scanlist_csv(
                 "ANAT": anat_sn,
                 "FMAP_MAG": fmap_mag_sn,
                 "FMAP_PHASE": fmap_phase_sn,
-                "FMAP_APLR": 0,
-                "FMAP_PARL": 0,
+                "FMAP_AP": 0,
+                "FMAP_PA": 0,
                 "T2": 0,
                 "T2_SESSION_ID": 0,
             })
@@ -239,8 +239,8 @@ def generate_scanlist_csv(
                 "ANAT": 0,
                 "FMAP_MAG": fmap_mag_sn,
                 "FMAP_PHASE": fmap_phase_sn,
-                "FMAP_APLR": 0,
-                "FMAP_PARL": 0,
+                "FMAP_AP": 0,
+                "FMAP_PA": 0,
                 "T2": 0,
                 "T2_SESSION_ID": 0,
             })
