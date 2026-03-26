@@ -29,7 +29,8 @@ set -euo pipefail
 
 # ── Defaults ──
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IPROC_DIR="$(dirname "$SCRIPT_DIR")"
+IPROC_CODE="$(dirname "$SCRIPT_DIR")"
+IPROC_DIR="$IPROC_CODE"
 CONTAINER="${SCRATCH:-/scratch}/containers/iproc.sif"
 BIDS_ROOT=""
 PARTITION="normal"
@@ -111,7 +112,8 @@ echo "  iProc Batch Submission"
 echo "  Stage: $STAGE"
 echo "  Subjects: ${#SUBJECTS[@]}"
 echo "  Container: $CONTAINER"
-echo "  iProc dir: $IPROC_DIR"
+echo "  iProc code: $IPROC_CODE"
+echo "  iProc output: $IPROC_DIR"
 [[ -n "$BIDS_ROOT" ]] && echo "  BIDS root: $BIDS_ROOT"
 echo "============================================"
 echo ""
@@ -136,10 +138,10 @@ for sub in "${SUBJECTS[@]}"; do
         --cpus-per-task=${CPUS} \
         --output=${LOG_DIR}/slurm_${STAGE}_%j.log \
         --wrap=\"apptainer exec \
-            --bind \${OAK}:/oak,\${SCRATCH}:/scratch \
+            --bind /oak:/oak,/scratch:/scratch \
             ${CONTAINER} \
             bash -c 'source /opt/iproc-venv/bin/activate && \
-                     cd ${IPROC_DIR} && \
+                     cd ${IPROC_CODE} && \
                      pip install -e . 2>/dev/null && \
                      mkdir -p ${LOG_DIR} && \
                      python iProc.py -c ${CONFIG} -s ${STAGE} ${BIDS_FLAG} --executor local'\""
