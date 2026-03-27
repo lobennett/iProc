@@ -260,11 +260,16 @@ class jobConstructor(object):
                     dest_fmapp_nii = os.path.join(fmap_full_dirname, 'pha_img.nii.gz')
                     bids_fmapp_file = fmap_scans['SECOND_BIDS_FNAME']
                     bids_fmapm_files = fmap_scans['FIRST_BIDS_FNAME']
+                    # Ensure these are always lists (single files come back as strings)
+                    if isinstance(bids_fmapm_files, str):
+                        bids_fmapm_files = [bids_fmapm_files]
+                    if isinstance(bids_fmapp_file, str):
+                        bids_fmapp_file = [bids_fmapp_file]
                     cmd = [script]
                     cmd.append('--input-fmapm')
                     cmd.extend(bids_fmapm_files)
                     cmd.append('--input-fmapp')
-                    cmd.append(bids_fmapp_file)
+                    cmd.extend(bids_fmapp_file)
                     cmd.extend([
                         '--output-fmapm', dest_fmapm_nii,
                         '--output-fmapp', dest_fmapp_nii,
