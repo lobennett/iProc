@@ -74,7 +74,7 @@ def match_scan_no_to_bids(bids_base,scans):
             # get filenames by aquisition number
             series_no = get_json_entity(json_fname,'SeriesNumber')
                 
-            nifti_filename = json_fname.rstrip('.json') + '.nii.gz'
+            nifti_filename = re.sub(r'\.json$', '.nii.gz', json_fname)
             if not os.path.exists(nifti_filename):
                 raise ValueError
             existing_fmap = fmap_no_to_nifti.get(series_no)
@@ -92,10 +92,10 @@ def match_scan_no_to_bids(bids_base,scans):
         bids_T2_json_fglob = f'sub-{sess.subjid}_ses-{bids_sessionid}_*_T2w.json'
         bids_T1_json_glob = os.path.join(bids_anat_fullpath,bids_T1_json_fglob)
         bids_T2_json_glob = os.path.join(bids_anat_fullpath,bids_T2_json_fglob)
-        anat_no_to_json = {}     
+        anat_no_to_json = {}
         anat_jsons = glob.glob(bids_T1_json_glob) + glob.glob(bids_T2_json_glob)
-        if not anat_jsons:
-            logger.error(f'no JSON file found for {bids_json_glob}')
+        if not anat_jsons and sess.anat_scans:
+            logger.error(f'no JSON file found for {bids_T1_json_glob}')
             raise IOError
         for json in anat_jsons:
             # get series number for T1w anat from json, save in dict for later
