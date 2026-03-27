@@ -49,6 +49,9 @@ def main():
     logger.info(f'created temporary working directory: {tempd}')
     os.chdir(tempd)
 
+    # Save original input paths before merge() destructively pops from lists
+    orig_fmapp_inputs = list(args.input_fmapp)
+
     # copy or merge magnitude image(s)
     fmapm = os.path.join(tempd, os.path.basename(args.output_fmapm))
     merge(args.input_fmapm, fmapm)
@@ -68,19 +71,13 @@ def main():
     # Read EchoTimeDifference and Manufacturer from the phasediff JSON sidecar
     delta_te = 2.46  # default (Siemens)
     scanner = 'SIEMENS'
-    logger.info(f'input_fmapp args: {args.input_fmapp}')
-    # Check both the original BIDS input path and the copied temp path
-    json_candidates = []
-    for inp in args.input_fmapp:
-        json_candidates.append(re.sub(r'\.nii(\.gz)?$', '.json', inp))
-    # Also check the output phasediff path's JSON (in BIDS source dir)
-    json_candidates.append(re.sub(r'\.nii(\.gz)?$', '.json', args.output_fmapp))
-    for candidate in json_candidates:
+    for inp in orig_fmapp_inputs:
+        candidate = re.sub(r'\.nii(\.gz)?$', '.json', inp)
         logger.info(f'checking JSON sidecar: {candidate} exists={os.path.exists(candidate)}')
         if os.path.exists(candidate):
             with open(candidate) as f:
                 js = json.load(f)
-            logger.info(f'JSON contents: {js}')
+            logger.info(f'JSON sidecar contents: {js}')
             if 'EchoTimeDifference' in js:
                 delta_te = js['EchoTimeDifference'] * 1000  # seconds → ms
                 logger.info(f'EchoTimeDifference from JSON: {delta_te} ms')
@@ -92,6 +89,7 @@ def main():
                     scanner = 'PHILIPS'
                 logger.info(f'Scanner manufacturer: {scanner}')
             break
+    logger.info(f'Using scanner={scanner}, delta_te={delta_te} ms')
 
     # prepare the field map
     fieldmap = os.path.join(tempd, os.path.basename(args.output_fieldmap))
