@@ -60,9 +60,32 @@ def main():
     
     # prepare the field map
     fieldmap = os.path.join(tempd, os.path.basename(args.output_fieldmap))
-    print('-----in line 62-------')
-    prepare_fieldmap((fmapp, fmapm_eroded), fieldmap, scanner='SIEMENS', delta_te=2.46)
-    ##, args.output_maskcopy)
+
+    # Read EchoTimeDifference from the phasediff JSON sidecar
+    delta_te = 2.46  # default (Siemens)
+    scanner = 'SIEMENS'
+    fmapp_json = None
+    for inp in args.input_fmapp:
+        candidate = re.sub(r'\.nii(\.gz)?$', '.json', inp)
+        if os.path.exists(candidate):
+            fmapp_json = candidate
+            break
+    if fmapp_json:
+        import json
+        with open(fmapp_json) as f:
+            js = json.load(f)
+        if 'EchoTimeDifference' in js:
+            delta_te = js['EchoTimeDifference'] * 1000  # seconds → ms
+            logger.info(f'EchoTimeDifference from JSON: {delta_te} ms')
+        if 'Manufacturer' in js:
+            mfr = js['Manufacturer'].upper()
+            if 'GE' in mfr:
+                scanner = 'GE'
+            elif 'PHILIPS' in mfr:
+                scanner = 'PHILIPS'
+            logger.info(f'Scanner manufacturer: {scanner}')
+
+    prepare_fieldmap((fmapp, fmapm_eroded), fieldmap, scanner=scanner, delta_te=delta_te)
 
     # move derived files to final destination
     logger.info('moving %s to %s', fmapm, args.output_fmapm)
@@ -123,10 +146,8 @@ def brain_extract(input, output):
         output,
         '-m'
     ]
-    _cmd = sp.list2cmdline(cmd)
-    cmd = f'module load fsl/4.0.3-ncf && {_cmd}'
     logger.info(cmd)
-    commons.check_output(cmd, shell=True)
+    commons.check_output(cmd)
 
 def erode(input, output, invert=True):
     '''
@@ -138,10 +159,8 @@ def erode(input, output, invert=True):
         '-ero',
         output
     ]
-    _cmd = sp.list2cmdline(cmd)
-    cmd = f'module load fsl/4.0.3-ncf && {_cmd}'
     logger.info(cmd)
-    commons.check_output(cmd, shell=True)
+    commons.check_output(cmd)
 
 def prepare_fieldmap(input, output, scanner='SIEMENS', delta_te=2.46):
     fmapp,fmapm_eroded = input

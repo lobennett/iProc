@@ -72,6 +72,7 @@ def patch_json_sidecars(
     bids_root: Path,
     sub_data: dict,
     echo_time_diff: float,
+    manufacturer: str = "GE",
 ) -> int:
     """Generate/patch JSON sidecars for files missing required iProc metadata.
 
@@ -120,6 +121,9 @@ def patch_json_sidecars(
                 needs_write = True
             if "EchoTimeDifference" not in existing:
                 existing["EchoTimeDifference"] = echo_time_diff
+                needs_write = True
+            if "Manufacturer" not in existing:
+                existing["Manufacturer"] = manufacturer
                 needs_write = True
 
             if needs_write:
@@ -355,6 +359,7 @@ def generate_all(
     codedir: str,
     fsldir: str,
     freesurfer_home: str,
+    manufacturer: str = "GE",
 ) -> None:
     """Generate all iProc config files from the manifest."""
     iproc_dir = iproc_dir.resolve()
@@ -386,7 +391,7 @@ def generate_all(
         log.info("=== Generating config for %s ===", sub_name)
 
         # 2a. Patch JSON sidecars in the BIDS directory
-        n_patched = patch_json_sidecars(bids_root, sub_data, echo_time_diff)
+        n_patched = patch_json_sidecars(bids_root, sub_data, echo_time_diff, manufacturer)
         if n_patched:
             log.info("  Patched %d JSON sidecar(s) in BIDS directory", n_patched)
 
@@ -435,6 +440,8 @@ def main():
                         help="FSLDIR path (default: /opt/fsl-5.0.10 for container)")
     parser.add_argument("--freesurfer-home", type=str, default="/opt/freesurfer-6.0.0",
                         help="FREESURFER_HOME path (default: /opt/freesurfer-6.0.0 for container)")
+    parser.add_argument("--manufacturer", type=str, default="GE",
+                        help="Scanner manufacturer for fieldmap processing (default: GE)")
 
     args = parser.parse_args()
 
@@ -453,6 +460,7 @@ def main():
         codedir=codedir,
         fsldir=args.fsldir,
         freesurfer_home=args.freesurfer_home,
+        manufacturer=args.manufacturer,
     )
 
 
