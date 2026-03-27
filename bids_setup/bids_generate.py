@@ -369,6 +369,17 @@ def generate_all(
         iproc_dir / "configs" / "tasktype_consolidated.csv",
     )
 
+    # 1b. Copy cluster_requests.csv from iProc code repo if not already present
+    cluster_req_dst = iproc_dir / "configs" / "cluster_requests.csv"
+    if not cluster_req_dst.exists():
+        cluster_req_src = Path(codedir) / "configs" / "cluster_requests.csv"
+        if cluster_req_src.exists():
+            import shutil
+            shutil.copy2(cluster_req_src, cluster_req_dst)
+            log.info("  Copied: %s", cluster_req_dst)
+        else:
+            log.warning("  cluster_requests.csv not found at %s — iProc will fail without it", cluster_req_src)
+
     # 2. Per-subject files
     for sub_name, sub_data in sorted(manifest["subjects"].items()):
         sub_label = sub_data["sub_label"]
