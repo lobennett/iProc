@@ -152,7 +152,19 @@ def erode(input, output, invert=True):
 
 def prepare_fieldmap(input, output, scanner='SIEMENS', delta_te=2.46):
     fmapp, fmapm_eroded = input
-    run(['fsl_prepare_fieldmap', scanner, fmapp, fmapm_eroded, output, str(delta_te)])
+    if scanner in ('SIEMENS', 'VARIAN'):
+        run(['fsl_prepare_fieldmap', scanner, fmapp, fmapm_eroded, output, str(delta_te)])
+    else:
+        # GE (and other) fieldmaps are already in Hz.
+        # fsl_prepare_fieldmap only supports SIEMENS/VARIAN, so we convert
+        # manually: multiply by 2*pi to get rad/s, then mask with the
+        # eroded brain magnitude (binarized).
+        import math
+        scale = 2 * math.pi
+        logger.info(f'GE fieldmap: converting Hz -> rad/s (multiply by {scale:.4f})')
+        # Hz → rad/s, masked by binarized eroded brain magnitude
+        run(['fslmaths', fmapp, '-mul', f'{scale:.6f}',
+             '-mas', fmapm_eroded, output])
 
 
 if __name__ == '__main__':
