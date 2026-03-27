@@ -68,11 +68,19 @@ def main():
     # Read EchoTimeDifference and Manufacturer from the phasediff JSON sidecar
     delta_te = 2.46  # default (Siemens)
     scanner = 'SIEMENS'
+    logger.info(f'input_fmapp args: {args.input_fmapp}')
+    # Check both the original BIDS input path and the copied temp path
+    json_candidates = []
     for inp in args.input_fmapp:
-        candidate = re.sub(r'\.nii(\.gz)?$', '.json', inp)
+        json_candidates.append(re.sub(r'\.nii(\.gz)?$', '.json', inp))
+    # Also check the output phasediff path's JSON (in BIDS source dir)
+    json_candidates.append(re.sub(r'\.nii(\.gz)?$', '.json', args.output_fmapp))
+    for candidate in json_candidates:
+        logger.info(f'checking JSON sidecar: {candidate} exists={os.path.exists(candidate)}')
         if os.path.exists(candidate):
             with open(candidate) as f:
                 js = json.load(f)
+            logger.info(f'JSON contents: {js}')
             if 'EchoTimeDifference' in js:
                 delta_te = js['EchoTimeDifference'] * 1000  # seconds → ms
                 logger.info(f'EchoTimeDifference from JSON: {delta_te} ms')
