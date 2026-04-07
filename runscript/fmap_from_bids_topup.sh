@@ -16,8 +16,8 @@ MASK_COPY=$8 # added by LMD
 preptool=topup
 
 # symlink BIDS NIFTI files to the expected locations ${FDIR}/AP_img.nii.gz and ${FDIR}/PA_img.nii.gz
-ln -s "${AP_BIDS_NIFTI}" "${FDIR}/AP_img.nii.gz"
-ln -s "${PA_BIDS_NIFTI}" "${FDIR}/PA_img.nii.gz"
+ln -sf "${AP_BIDS_NIFTI}" "${FDIR}/AP_img.nii.gz"
+ln -sf "${PA_BIDS_NIFTI}" "${FDIR}/PA_img.nii.gz"
 
 # change later if it comes up
 b02b0=$codedir/configs/b02b0.cnf
