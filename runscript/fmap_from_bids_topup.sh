@@ -16,6 +16,9 @@ MASK_COPY=$8 # added by LMD
 preptool=topup
 
 # symlink BIDS NIFTI files to the expected locations ${FDIR}/AP_img.nii.gz and ${FDIR}/PA_img.nii.gz
+# resolve to absolute paths so symlinks remain valid after cd into FDIR
+AP_BIDS_NIFTI=$(realpath "${AP_BIDS_NIFTI}")
+PA_BIDS_NIFTI=$(realpath "${PA_BIDS_NIFTI}")
 ln -sf "${AP_BIDS_NIFTI}" "${FDIR}/AP_img.nii.gz"
 ln -sf "${PA_BIDS_NIFTI}" "${FDIR}/PA_img.nii.gz"
 
