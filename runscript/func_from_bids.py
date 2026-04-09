@@ -33,7 +33,7 @@ def main():
         help='Number of echos')
     args = parser.parse_args()
     
-    args.input = os.path.expanduser(args.input)
+    args.input = os.path.realpath(os.path.expanduser(args.input))
     args.output = os.path.expanduser(args.output)
 
     os.makedirs(args.work_dir, exist_ok=True)

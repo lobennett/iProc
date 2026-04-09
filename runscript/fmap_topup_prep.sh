@@ -10,7 +10,14 @@ OUTDIR=$5
 MASK_COPY=$6 # added for FMAP QC
 
 # needed for the best version of topup
-module load fsl/6.0.1-ncf
+if module load fsl/6.0.1-ncf 2>/dev/null; then
+    echo "Loaded fsl/6.0.1-ncf via module"
+elif [ -n "${FSLDIR:-}" ]; then
+    echo "Using FSL from FSLDIR: $FSLDIR"
+else
+    echo "ERROR: FSL not available via module or FSLDIR" >&2
+    exit 1
+fi
 
 cd $FDIR
 

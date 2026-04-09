@@ -24,7 +24,7 @@ def main():
         help='Working directory')
     args = parser.parse_args()
     
-    args.input = os.path.expanduser(args.input)
+    args.input = os.path.realpath(os.path.expanduser(args.input))
     args.raw_output = os.path.expanduser(args.raw_output)
 
     raw_basename = os.path.basename(args.raw_output)

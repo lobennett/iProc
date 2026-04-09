@@ -22,19 +22,16 @@ CODE_DIR=${16}
 
 tmpdir=$(mktemp --directory --tmpdir=${OUTDIR})
 
-if [ "${IPROC_SRUN:-NO}" == "YES" ] ; then
-    #we're running in a srun-safe environment
-srun --export=ALL -n 1 -c $SLURM_CPUS_PER_TASK parallel -j 3 --tmpdir=${tmpdir} <<EOF
+if command -v parallel &>/dev/null; then
+    parallel -j 3 --tmpdir=${tmpdir} <<EOF
 fslmeants -i ${RESID_IN} -o ${CSF_TS} -m ${CSF_MASK}
 fslmeants -i ${RESID_IN} -o ${WM_TS} -m ${WM_MASK}
 fslmeants -i ${RESID_IN} -o ${WB_TS} -m ${WB_MASK}
 EOF
 else
-parallel -j 3 --tmpdir=${tmpdir} <<EOF
-fslmeants -i ${RESID_IN} -o ${CSF_TS} -m ${CSF_MASK}
-fslmeants -i ${RESID_IN} -o ${WM_TS} -m ${WM_MASK}
-fslmeants -i ${RESID_IN} -o ${WB_TS} -m ${WB_MASK}
-EOF
+    fslmeants -i ${RESID_IN} -o ${CSF_TS} -m ${CSF_MASK}
+    fslmeants -i ${RESID_IN} -o ${WM_TS} -m ${WM_MASK}
+    fslmeants -i ${RESID_IN} -o ${WB_TS} -m ${WB_MASK}
 fi
 # note: this WB_TS is identical in all respects to the one produced
 #by runscript/remove_WB_only.sh
