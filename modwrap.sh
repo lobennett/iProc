@@ -7,8 +7,8 @@ postcmd=$2
 shift
 shift
 
-$prepcmd
+$prepcmd || true
 
 "$@"
 
-$postcmd
+$postcmd || true
