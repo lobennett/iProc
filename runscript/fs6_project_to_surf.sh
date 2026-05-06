@@ -24,56 +24,43 @@ if [ "${IPROC_SRUN:-NO}" == "YES" ] ; then
 else
     _IPROC_RUNNER=""
 fi
+
+BOLDS=("$BOLD" "$BOLD2" "$BOLD3" "$BOLD4")
+
+run_cmds() {
+    if command -v parallel &>/dev/null; then
+        $_IPROC_RUNNER parallel -j 4 --tmpdir=${tmpdir}
+    else
+        while IFS= read -r cmd; do
+            bash -c "$cmd"
+        done
+    fi
+}
+
 #Project data
-$_IPROC_RUNNER parallel -j 4 --tmpdir=${tmpdir} <<EOF
-mri_vol2surf --mov $BOLDPATH/${BOLD}.nii.gz --regheader $SESST --hemi lh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/lh.${BOLD}_fsaverage6.nii --reshape --interp trilinear
-mri_vol2surf --mov $BOLDPATH/${BOLD}.nii.gz --regheader $SESST --hemi rh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/rh.${BOLD}_fsaverage6.nii --reshape --interp trilinear
-mri_vol2surf --mov $BOLDPATH/${BOLD2}.nii.gz --regheader $SESST --hemi lh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/lh.${BOLD2}_fsaverage6.nii --reshape --interp trilinear
-mri_vol2surf --mov $BOLDPATH/${BOLD2}.nii.gz --regheader $SESST --hemi rh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/rh.${BOLD2}_fsaverage6.nii --reshape --interp trilinear
-mri_vol2surf --mov $BOLDPATH/${BOLD3}.nii.gz --regheader $SESST --hemi lh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/lh.${BOLD3}_fsaverage6.nii --reshape --interp trilinear
-mri_vol2surf --mov $BOLDPATH/${BOLD3}.nii.gz --regheader $SESST --hemi rh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/rh.${BOLD3}_fsaverage6.nii --reshape --interp trilinear
-mri_vol2surf --mov $BOLDPATH/${BOLD4}.nii.gz --regheader $SESST --hemi lh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/lh.${BOLD4}_fsaverage6.nii --reshape --interp trilinear
-mri_vol2surf --mov $BOLDPATH/${BOLD4}.nii.gz --regheader $SESST --hemi rh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/rh.${BOLD4}_fsaverage6.nii --reshape --interp trilinear
+run_cmds <<EOF
+$(for b in "${BOLDS[@]}"; do
+    echo "mri_vol2surf --mov $BOLDPATH/${b}.nii.gz --regheader $SESST --hemi lh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/lh.${b}_fsaverage6.nii --reshape --interp trilinear"
+    echo "mri_vol2surf --mov $BOLDPATH/${b}.nii.gz --regheader $SESST --hemi rh --projfrac 0.5 --trgsubject fsaverage6 --o $tmpdir/rh.${b}_fsaverage6.nii --reshape --interp trilinear"
+done)
 EOF
 
 #Smooth data
-$_IPROC_RUNNER parallel -j 4 --tmpdir=${tmpdir} <<EOF
-mri_surf2surf --hemi lh --s fsaverage6 --sval $tmpdir/lh.${BOLD}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/lh.${BOLD}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape
-mri_surf2surf --hemi rh --s fsaverage6 --sval $tmpdir/rh.${BOLD}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/rh.${BOLD}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape
-mri_surf2surf --hemi lh --s fsaverage6 --sval $tmpdir/lh.${BOLD2}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/lh.${BOLD2}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape
-mri_surf2surf --hemi rh --s fsaverage6 --sval $tmpdir/rh.${BOLD2}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/rh.${BOLD2}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape
-mri_surf2surf --hemi lh --s fsaverage6 --sval $tmpdir/lh.${BOLD3}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/lh.${BOLD3}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape
-mri_surf2surf --hemi rh --s fsaverage6 --sval $tmpdir/rh.${BOLD3}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/rh.${BOLD3}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape
-mri_surf2surf --hemi lh --s fsaverage6 --sval $tmpdir/lh.${BOLD4}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/lh.${BOLD4}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape
-mri_surf2surf --hemi rh --s fsaverage6 --sval $tmpdir/rh.${BOLD4}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/rh.${BOLD4}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape
+run_cmds <<EOF
+$(for b in "${BOLDS[@]}"; do
+    echo "mri_surf2surf --hemi lh --s fsaverage6 --sval $tmpdir/lh.${b}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/lh.${b}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape"
+    echo "mri_surf2surf --hemi rh --s fsaverage6 --sval $tmpdir/rh.${b}_fsaverage6.nii --cortex --fwhm-trg ${SMOOTH} --tval $tmpdir/rh.${b}_fsaverage6_sm${SMOOTH_NAME}.nii --reshape"
+done)
 EOF
 
-$_IPROC_RUNNER parallel -j 4 --tmpdir=${tmpdir} <<EOF
-gzip -f $tmpdir/lh.${BOLD}_fsaverage6_sm${SMOOTH_NAME}.nii
-gzip -f $tmpdir/rh.${BOLD}_fsaverage6_sm${SMOOTH_NAME}.nii
-gzip -f $tmpdir/lh.${BOLD}_fsaverage6.nii
-gzip -f $tmpdir/rh.${BOLD}_fsaverage6.nii
-EOF
-
-$_IPROC_RUNNER parallel -j 4 --tmpdir=${tmpdir} <<EOF
-gzip -f $tmpdir/lh.${BOLD2}_fsaverage6_sm${SMOOTH_NAME}.nii
-gzip -f $tmpdir/rh.${BOLD2}_fsaverage6_sm${SMOOTH_NAME}.nii
-gzip -f $tmpdir/lh.${BOLD2}_fsaverage6.nii
-gzip -f $tmpdir/rh.${BOLD2}_fsaverage6.nii
-EOF
-
-$_IPROC_RUNNER parallel -j 4 --tmpdir=${tmpdir} <<EOF
-gzip -f $tmpdir/lh.${BOLD3}_fsaverage6_sm${SMOOTH_NAME}.nii
-gzip -f $tmpdir/rh.${BOLD3}_fsaverage6_sm${SMOOTH_NAME}.nii
-gzip -f $tmpdir/lh.${BOLD3}_fsaverage6.nii
-gzip -f $tmpdir/rh.${BOLD3}_fsaverage6.nii
-EOF
-
-$_IPROC_RUNNER parallel -j 4 --tmpdir=${tmpdir} <<EOF
-gzip -f $tmpdir/lh.${BOLD4}_fsaverage6_sm${SMOOTH_NAME}.nii
-gzip -f $tmpdir/rh.${BOLD4}_fsaverage6_sm${SMOOTH_NAME}.nii
-gzip -f $tmpdir/lh.${BOLD4}_fsaverage6.nii
-gzip -f $tmpdir/rh.${BOLD4}_fsaverage6.nii
+# Gzip outputs
+run_cmds <<EOF
+$(for b in "${BOLDS[@]}"; do
+    echo "gzip -f $tmpdir/lh.${b}_fsaverage6_sm${SMOOTH_NAME}.nii"
+    echo "gzip -f $tmpdir/rh.${b}_fsaverage6_sm${SMOOTH_NAME}.nii"
+    echo "gzip -f $tmpdir/lh.${b}_fsaverage6.nii"
+    echo "gzip -f $tmpdir/rh.${b}_fsaverage6.nii"
+done)
 EOF
 
 #rsync -av --remove-source-files ${tmpdir}/* ${OUTPATH}
