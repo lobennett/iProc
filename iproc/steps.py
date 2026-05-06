@@ -1651,6 +1651,7 @@ class jobConstructor(object):
 
                 else:
                     print('***** MULTI-ECHO steps.calculate_nuisance_params*****')
+                    codedir = os.path.expanduser(self.conf.iproc.CODEDIR)
                     outputdir = os.path.join(self.conf.iproc.NAT_RESAMP_DIR, sessionid, task_dirname)
                     natdir = os.path.join(self.conf.iproc.NATDIR,  sessionid, task_dirname)
                     resid_in = os.path.join(outputdir,f'{sessionid}_bld{bold_no}_reorient_skip_mc_unwarp_anat_e1.nii.gz')
@@ -1687,7 +1688,8 @@ class jobConstructor(object):
                         nuis_out,
                         outputdir,
                         mcout_ts,
-                        nuis_out_nocensor]
+                        nuis_out_nocensor,
+                        codedir]
         
                     logfile_base = self._io_file_fmt(cmd)
                     job_spec_list.append(JobSpec(cmd,logfile_base,outfiles))
