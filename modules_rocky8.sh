@@ -7,7 +7,6 @@ __dir__=$(readlink -f $(dirname "${BASH_SOURCE[0]}"))
 module load \
   ncf/1.0.0-fasrc01 \
   parallel/20180522-rocky8_x64-ncf \
-  miniconda3/py311_23.11.0-2-linux_x64-ncf \
   mricron/2012_12-ncf \
   afni/2016_09_04-ncf \
   fsl/5.0.10-centos7_x64-ncf \
@@ -18,8 +17,3 @@ module load \
   connectome_workbench/1.3.2-centos6_x64-ncf \
   dcm2niix/1.0.20230411-rocky8_x64-ncf
 
-export _IPROC_CODEDIR="${__dir__}"
-echo "_IPROC_CODEDIR: ${_IPROC_CODEDIR}"
-
-export PYTHONPATH="${PYTHONPATH}:${__dir__}"
-echo "PYTHONPATH: ${PYTHONPATH}"
