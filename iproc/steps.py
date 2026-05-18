@@ -59,10 +59,15 @@ class jobConstructor(object):
             for anat_dir,anat_scan in self.scans.anats():
                 run = anat_scan['BIDS_ID']
                 logger.info(f'processing sub={sub}, ses={ses}, anat={run}')
-                basename = f'ses-{sanitize(ses)}/anat/sub-{sanitize(sub)}_ses-{sanitize(ses)}_run-{run}_T1w.nii.gz'
-                bids_anat_file = os.path.join(self.args.bids, basename)
-                if not os.path.exists(bids_anat_file):
-                    raise IOError(f'{bids_anat_file} does not exist.')
+                # Use glob to find the T1w file regardless of optional BIDS entities (e.g. acq-)
+                anat_glob = os.path.join(
+                    self.args.bids,
+                    f'ses-{sanitize(ses)}/anat/sub-{sanitize(sub)}_ses-{sanitize(ses)}_*_run-{run}_T1w.nii.gz'
+                )
+                anat_matches = glob.glob(anat_glob)
+                if not anat_matches:
+                    raise IOError(f'No T1w file found matching: {anat_glob}')
+                bids_anat_file = anat_matches[0]
                 #scan_no is set automatically by self.scans.anats()
                 run_zpad = f'{int(self.scans.scan_no):03d}'  # note that this is the ScanNumber, not the BIDS run number
                 anat_basename = f'{ses}_mpr{run_zpad}'
@@ -115,10 +120,18 @@ class jobConstructor(object):
 
                 logger.info(f'processing sub={sub}, ses={ses}, task={task_name}, run={run}')
 
+                # Resolve the BIDS func file via glob to handle case differences between
+                # the all-caps scanlist task names (e.g. REST, CUEDTS) and the actual
+                # mixed-case BIDS filenames (e.g. task-rest, task-cuedTS).
+                func_dir = os.path.join(self.args.bids, f'ses-{sanitize(ses)}/func')
+
                 if int(numechos) == 1:
 
-                    basename = f'ses-{sanitize(ses)}/func/sub-{sanitize(sub)}_ses-{sanitize(ses)}_task-{bids_task_name}_run-{run}_bold.nii.gz'
-                    bids_func_file = os.path.join(self.args.bids, basename)
+                    func_glob = os.path.join(func_dir, f'sub-{sanitize(sub)}_ses-{sanitize(ses)}_task-*_run-{run}_bold.nii.gz')
+                    func_matches = [f for f in glob.glob(func_glob) if f.lower().count(f'task-{bids_task_name.lower()}_') == 1]
+                    if not func_matches:
+                        raise IOError(f'No BOLD file found matching (case-insensitive task={bids_task_name}): {func_glob}')
+                    bids_func_file = func_matches[0]
                     run_zpad = f'{int(bold_scan["BLD"]):03d}'
 
                     task_dirname = os.path.join(self.conf.iproc.NATDIR, ses, f'{task_name}_{run_zpad}')
@@ -157,8 +170,11 @@ class jobConstructor(object):
                 ### ---- MULTI_ECHO!!!!, JS 2025.03.19 ---- ###
                 else:
                     for iEcho in range(1,int(numechos) + 1):
-                        basename = f'ses-{sanitize(ses)}/func/sub-{sanitize(sub)}_ses-{sanitize(ses)}_task-{bids_task_name}_run-{run}_echo-{iEcho}_bold.nii.gz'
-                        bids_func_file = os.path.join(self.args.bids, basename)
+                        func_glob = os.path.join(func_dir, f'sub-{sanitize(sub)}_ses-{sanitize(ses)}_task-*_run-{run}_echo-{iEcho}_bold.nii.gz')
+                        func_matches = [f for f in glob.glob(func_glob) if f.lower().count(f'task-{bids_task_name.lower()}_') == 1]
+                        if not func_matches:
+                            raise IOError(f'No BOLD file found matching (case-insensitive task={bids_task_name}): {func_glob}')
+                        bids_func_file = func_matches[0]
                         run_zpad = f'{int(bold_scan["BLD"]):03d}'
 
                         task_dirname = os.path.join(self.conf.iproc.NATDIR, ses, f'{task_name}_{run_zpad}')

@@ -99,7 +99,7 @@ def match_scan_no_to_bids(bids_base,scans):
             raise IOError
         for json in anat_jsons:
             # get series number for T1w anat from json, save in dict for later
-            anat_regex = f'.*sub-{sess.subjid}_ses-{bids_sessionid}_run-([0-9]+)_(T1w|T2w).json'
+            anat_regex = f'.*sub-{sess.subjid}_ses-{bids_sessionid}(?:_[^_]+)*_run-([0-9]+)_(T1w|T2w).json'
             anat_match = re.match(anat_regex,json)
             run_no = anat_match.group(1)
             series_no = get_json_entity(anat_match.string,'SeriesNumber')

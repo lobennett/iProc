@@ -7,8 +7,10 @@ import json
 import shutil
 import logging
 import argparse as ap
-import tempfile as tf 
+import tempfile as tf
 import subprocess as sp
+# Ensure the iProc package root is on sys.path when run as a subprocess
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import iproc.commons as commons
 
 logger = logging.getLogger(__name__)
@@ -33,11 +35,13 @@ def main():
         help='Number of echos')
     args = parser.parse_args()
     
-    args.input = os.path.expanduser(args.input)
+    bids_input = os.path.expanduser(args.input)
+    # Resolve symlinks so FSL can read git-annex objects; keep bids_input for JSON sidecar lookup
+    args.input = os.path.realpath(bids_input)
     args.output = os.path.expanduser(args.output)
 
     os.makedirs(args.work_dir, exist_ok=True)
-    
+
     # create a temporary directory for this process
     tempd = tf.mkdtemp(dir=args.work_dir)
     logger.info(f'created temporary working directory: {tempd}')
@@ -58,9 +62,10 @@ def main():
     # move files to final destination
     logger.info(f'moving {skipped}.nii.gz to final destination {args.output}')
     shutil.move(f'{skipped}.nii.gz', args.output)
-        
-    # copy BIDS json file to output directory
-    src = translate_json(args.input, args.sec_base, args.num_echos)
+
+    # copy BIDS json file to output directory; use bids_input (not realpath) so the
+    # JSON sidecar is found alongside the BIDS NIfTI, not inside the git-annex object tree
+    src = translate_json(bids_input, args.sec_base, args.num_echos)
 
     if int(args.num_echos) == 1:
         dst = os.path.join(args.output, f'{args.sec_base}.json')

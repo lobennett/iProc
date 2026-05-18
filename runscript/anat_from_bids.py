@@ -5,8 +5,10 @@ import sys
 import shutil
 import logging
 import argparse as ap
-import tempfile as tf 
+import tempfile as tf
 import subprocess as sp
+# Ensure the iProc package root is on sys.path when run as a subprocess
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import iproc.commons as commons
 
 logger = logging.getLogger(__name__)
