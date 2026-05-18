@@ -139,7 +139,7 @@ for sub in "${SUBJECTS[@]}"; do
         --output=${LOG_DIR}/slurm_${STAGE}_%j.log \
         --error=${LOG_DIR}/slurm_${STAGE}_%j.err \
         --wrap=\"apptainer exec \
-            --bind /oak:/oak,/scratch:/scratch \
+            --bind /oak:/oak,/scratch:/scratch,${IPROC_CODE}/container/imagemagick-policy.xml:/etc/ImageMagick-6/policy.xml:ro \
             ${CONTAINER} \
             bash -c 'set -e && \
                      source /opt/iproc-venv/bin/activate && \
