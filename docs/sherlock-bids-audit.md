@@ -6,7 +6,7 @@
 
 ## Divergence
 
-- Commits ahead of upstream: 22
+- Commits ahead of upstream: 22 (pre-audit-commit count; after this audit doc commit lands becomes 23)
 - Commits behind upstream: 12
 - Decision: defer
 
@@ -36,7 +36,7 @@ Rationale: The 12 upstream commits split into two clusters: (1) docs/tutorial/qu
 
 - `224a6db` fix: bind /oak:/oak (not $OAK:/oak), cd to codedir not output dir — bids_setup/run_subjects.sh bind path + cwd fix
 - `c4b9fc3` fix: capture stderr in separate .err log, echo iProc command before running — bids_setup/run_subjects.sh logging
-- `6b04db7` fix: fmap_from_bids.py — read scanner/delta_te from JSON, remove module load — runscript/fmap_from_bids.py JSON read + module fix
+- `6b04dc7` fix: fmap_from_bids.py — read scanner/delta_te from JSON, remove module load — runscript/fmap_from_bids.py JSON read + module fix
 - `f786f1c` fix: wrap BIDS fieldmap filenames in list before cmd.extend() — runscript/fmap_from_bids.py type fix
 - `6c2573c` fix: remove iproc.commons dependency from fmap_from_bids.py — runscript/fmap_from_bids.py import cleanup
 - `3bc9094` debug: add logging to fmap JSON sidecar lookup — runscript/fmap_from_bids.py debug logging
