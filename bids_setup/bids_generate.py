@@ -269,7 +269,7 @@ OUTDIR=${{basedir}}/mri_data
 LOGDIR=${{outdir}}/${{sub}}/logs
 SCRATCHDIR=${{basedir}}/scratch/
 MASKSDIR=${{basedir}}/mni_masks
-FONT=Nimbus-Sans-Regular
+FONT=DejaVu-Sans
 CODEDIR={codedir}
 
 [template]
@@ -449,7 +449,7 @@ def main():
         log.error("Manifest not found: %s", args.manifest)
         sys.exit(1)
 
-    codedir = args.codedir or str(args.iproc_dir)
+    codedir = args.codedir or str(Path(__file__).parent.parent.resolve())
 
     with open(args.manifest) as f:
         manifest = yaml.safe_load(f)
