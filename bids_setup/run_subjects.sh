@@ -15,9 +15,9 @@
 #   --iproc-dir PATH   iProc output directory (default: /scratch/users/logben/discovery_bids/derivatives/iproc; or $IPROC_DIR env)
 #   --container PATH   Path to iproc.sif (default: <iproc-code>/container/iproc.sif; or $CONTAINER env)
 #   --partition NAME   SLURM partition (default: normal)
-#   --time HH:MM:SS    Wall time (default: 04:00:00)
-#   --mem SIZE         Memory (default: 32G)
-#   --cpus N           CPUs per task (default: 4)
+#   --time HH:MM:SS    Wall time (default: 08:00:00)
+#   --mem SIZE         Memory (default: 64G)
+#   --cpus N           CPUs per task (default: 16)
 #   --dry-run          Print sbatch commands without submitting
 #
 # Example:
@@ -34,9 +34,9 @@ IPROC_DIR="${IPROC_DIR:-/scratch/users/logben/discovery_bids/derivatives/iproc}"
 CONTAINER="${CONTAINER:-${IPROC_CODE}/container/iproc.sif}"
 BIDS_ROOT=""
 PARTITION="normal"
-TIME="04:00:00"
-MEM="32G"
-CPUS=4
+TIME="08:00:00"
+MEM="64G"
+CPUS=16
 DRY_RUN=false
 
 # ── Parse args ──
