@@ -69,3 +69,19 @@ apptainer exec container/iproc.sif python -c "import nibabel, scipy, matplotlib,
 Result: **all imports ok**
 
 All Phase 5 Python dependencies (nibabel, scipy, matplotlib, numpy) are present in the existing container. No container rebuild required as a Phase 5 prerequisite.
+
+---
+
+## Phase 3 — In-flight state (2026-05-17 evening)
+
+**SLURM job 25284880** (`setup` stage for sub-s10) submitted ~23:30 PT and running.
+
+**Pre-our-work pollution warning.** Earlier failed setup attempts (jobs 25276457, 25276956, 25277640, 25277879) ran before any of the `.bidsignore`/ANAT_RE/scratch-paths fixes. They created partial output in `mri_data/s10/NAT/01/`, `NAT/06/`, and `scratch/*` directories. The stale running job `25277879` was scancel'd at 1:38h elapsed.
+
+After job 25284880 completes:
+1. Inspect `mri_data/s10/NAT/` for evidence of the bad `acq-MPRAGEPromo` T1w (should be ABSENT — only `acq-SagMPRAGE` from ses-09 should be present).
+2. Inspect for `.bidsignored` BOLDs (e.g. ses-01 cuedTS, ses-01 goNogo run-1) — should be ABSENT.
+3. If polluted, wipe `mri_data/s10/` + `scratch/*` and resubmit setup.
+4. If clean, submit bet stage.
+
+**Cross-session anat concern (deferred).** `bids_generate.py` writes `ANAT=0` for sessions without their own T1w. The s03 stall logs showed `no such anat found! ANAT=0`. The fix may be to broadcast `t1_sel['series_number']` across all sessions in `bids_generate.py:193-196`. We will know after this setup run whether the upstream cherry-pick alone is sufficient.
