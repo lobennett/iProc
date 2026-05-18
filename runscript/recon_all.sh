@@ -49,8 +49,9 @@ fi
 
 sleep 3
 
-echo "Copying /scratch/${SUBJECT}/${fs_sub}/ contents to ${SUBJECTSDIR}/${fs_sub}/"
+echo "Moving /scratch/${SUBJECT}/${fs_sub}/ contents to ${SUBJECTSDIR}/${fs_sub}/"
 mkdir -p ${SUBJECTSDIR}/${fs_sub}/
-rsync --remove-source-files -aP $SCRATCHDIR/${SUBJECT}/${fs_sub}/* ${SUBJECTSDIR}/${fs_sub}/
+# rsync is not in the container; use mv (same filesystem, instant rename, no copy).
+mv $SCRATCHDIR/${SUBJECT}/${fs_sub}/* ${SUBJECTSDIR}/${fs_sub}/
 
 ln -sfT ${FSAVERAGE6} $SUBJECTSDIR/fsaverage6
