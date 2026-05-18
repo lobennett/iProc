@@ -23,6 +23,7 @@ Review it, edit T1 selections or exclude sessions, then pass to bids_generate.py
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import logging
 import re
@@ -109,6 +110,27 @@ def get_descrip_te(nii_path: Path) -> float | None:
 
 
 # ---------------------------------------------------------------------------
+# .bidsignore filtering
+# ---------------------------------------------------------------------------
+
+def load_bidsignore_patterns(bids_root: Path) -> list[str]:
+    """Read .bidsignore from the BIDS root; one glob pattern per non-empty line."""
+    ignore_path = bids_root / ".bidsignore"
+    if not ignore_path.exists():
+        return []
+    return [
+        line.strip()
+        for line in ignore_path.read_text().splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+
+def is_bidsignored(relative_path: str, patterns: list[str]) -> bool:
+    """Match a BIDS-relative path (e.g. 'sub-s10/ses-01/func/...') against patterns."""
+    return any(fnmatch.fnmatch(relative_path, p) for p in patterns)
+
+
+# ---------------------------------------------------------------------------
 # Discovery
 # ---------------------------------------------------------------------------
 
@@ -122,6 +144,8 @@ def discover_subject(
     """Discover all sessions, tasks, fieldmaps, and anatomicals for one subject."""
     sub_id = sub_dir.name
     sub_label = sub_id.replace("sub-", "")
+
+    bidsignore = load_bidsignore_patterns(bids_root)
 
     sessions: dict[str, dict] = {}
     task_params: dict[str, dict] = {}
@@ -149,6 +173,9 @@ def discover_subject(
         fmap_dir = ses_dir / "fmap"
         if fmap_dir.is_dir():
             for f in sorted(fmap_dir.glob("*.nii.gz")):
+                if is_bidsignored(str(f.relative_to(bids_root)), bidsignore):
+                    log.debug("Skipping .bidsignored fmap: %s", f.name)
+                    continue
                 mag_m = FMAP_MAG_RE.match(f.name)
                 phase_m = FMAP_PHASE_RE.match(f.name)
 
@@ -184,6 +211,9 @@ def discover_subject(
         anat_dir = ses_dir / "anat"
         if anat_dir.is_dir():
             for f in sorted(anat_dir.glob("*.nii.gz")):
+                if is_bidsignored(str(f.relative_to(bids_root)), bidsignore):
+                    log.debug("Skipping .bidsignored anat: %s", f.name)
+                    continue
                 m = ANAT_RE.match(f.name)
                 if not m:
                     continue
@@ -202,6 +232,9 @@ def discover_subject(
             task_run_echoes: dict[str, list] = defaultdict(list)
 
             for f in sorted(func_dir.glob("*_bold.nii.gz")):
+                if is_bidsignored(str(f.relative_to(bids_root)), bidsignore):
+                    log.debug("Skipping .bidsignored BOLD: %s", f.name)
+                    continue
                 m = BOLD_RE.match(f.name)
                 if not m:
                     continue
