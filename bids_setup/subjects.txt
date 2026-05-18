@@ -1,5 +1,0 @@
-# subjects.txt — One subject label per line
-# Lines starting with # are comments
-# Subject labels should match BIDS sub-{label} and iProc mri_data/{label}/
-s03
-# s10

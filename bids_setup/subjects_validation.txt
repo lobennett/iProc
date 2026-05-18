@@ -1,0 +1,3 @@
+# subjects_validation.txt — validation cohort.
+# To be populated in the Phase 7 follow-on plan after the discovery
+# cohort lands.  Until then this file is intentionally empty.

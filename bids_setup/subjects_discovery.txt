@@ -1,0 +1,8 @@
+# subjects_discovery.txt — discovery cohort, one subject label per line.
+# Lines starting with # are skipped.
+# Labels match BIDS sub-{label} and iProc mri_data/{label}/.
+s10
+# s19
+# s29
+# s43
+# s03  -- blocked on fmriprep rerun; re-enable when its job 25256995 completes and re-QA passes
