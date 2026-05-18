@@ -14,7 +14,7 @@ on Stanford Sherlock HPC using the iProc Apptainer container.
 Set these once per shell session (or add to your `~/.bashrc`):
 
 ```bash
-export BIDS_ROOT=/oak/stanford/groups/russpold/data/network_grant/discovery_BIDS_20250402
+export BIDS_ROOT=/scratch/users/logben/discovery_bids
 export IPROC_DIR=${BIDS_ROOT}/derivatives/iproc
 export IPROC_CODE=$SCRATCH/iProc
 export CONTAINER=$SCRATCH/iProc/container/iproc.sif
@@ -111,9 +111,9 @@ grep ANAT $IPROC_DIR/mri_data/s03/subject_lists/scanlist_s03.csv
 
 ---
 
-## Step 3: Prepare subjects.txt
+## Step 3: Prepare subjects_discovery.txt
 
-Edit `bids_setup/subjects.txt` — one subject label per line:
+Edit `bids_setup/subjects_discovery.txt` — one subject label per line:
 
 ```
 s03
@@ -135,7 +135,7 @@ Ingests BIDS data (fieldmaps, anatomicals, functionals) and runs FreeSurfer
 
 ```bash
 cd $IPROC_CODE
-./bids_setup/run_subjects.sh bids_setup/subjects.txt setup \
+./bids_setup/run_subjects.sh bids_setup/subjects_discovery.txt setup \
     --bids-root $BIDS_ROOT \
     --iproc-dir $IPROC_DIR \
     --container $CONTAINER \
@@ -159,7 +159,7 @@ and iProc will skip `recon-all`.
 Brain extraction on the MNI-warped T1.
 
 ```bash
-./bids_setup/run_subjects.sh bids_setup/subjects.txt bet \
+./bids_setup/run_subjects.sh bids_setup/subjects_discovery.txt bet \
     --iproc-dir $IPROC_DIR --container $CONTAINER \
     --time 01:00:00 --mem 16G
 ```
@@ -171,7 +171,7 @@ Brain extraction on the MNI-warped T1.
 Motion correction, fieldmap unwarping, and alignment to midvol template.
 
 ```bash
-./bids_setup/run_subjects.sh bids_setup/subjects.txt unwarp_motioncorrect_align \
+./bids_setup/run_subjects.sh bids_setup/subjects_discovery.txt unwarp_motioncorrect_align \
     --iproc-dir $IPROC_DIR --container $CONTAINER \
     --time 08:00:00 --mem 32G
 ```
@@ -184,7 +184,7 @@ templates. Review motion parameters (FD plots).
 Boundary-based registration, T1-to-MNI warp, and mask generation.
 
 ```bash
-./bids_setup/run_subjects.sh bids_setup/subjects.txt T1_warp_and_mask \
+./bids_setup/run_subjects.sh bids_setup/subjects_discovery.txt T1_warp_and_mask \
     --iproc-dir $IPROC_DIR --container $CONTAINER \
     --time 04:00:00 --mem 32G
 ```
@@ -198,7 +198,7 @@ Combines all transformation matrices and applies in a single interpolation
 to native and MNI space.
 
 ```bash
-./bids_setup/run_subjects.sh bids_setup/subjects.txt combine_and_apply_warp \
+./bids_setup/run_subjects.sh bids_setup/subjects_discovery.txt combine_and_apply_warp \
     --iproc-dir $IPROC_DIR --container $CONTAINER \
     --time 08:00:00 --mem 64G
 ```
@@ -228,7 +228,7 @@ apptainer exec --bind $OAK:/oak,$SCRATCH:/scratch $CONTAINER bash -c "
 Nuisance regression, bandpass filtering, and surface projection to fsaverage6.
 
 ```bash
-./bids_setup/run_subjects.sh bids_setup/subjects.txt filter_and_project \
+./bids_setup/run_subjects.sh bids_setup/subjects_discovery.txt filter_and_project \
     --iproc-dir $IPROC_DIR --container $CONTAINER \
     --time 08:00:00 --mem 32G
 ```
@@ -246,7 +246,7 @@ Nuisance regression, bandpass filtering, and surface projection to fsaverage6.
 ## run_subjects.sh Reference
 
 ```bash
-./bids_setup/run_subjects.sh <subjects.txt> <stage> [options]
+./bids_setup/run_subjects.sh <subjects_discovery.txt> <stage> [options]
 ```
 
 | Flag | Default | Description |
@@ -279,7 +279,7 @@ cat $IPROC_DIR/mri_data/s03/logs/slurm_setup_*.log
 
 ### Dry run (preview without submitting)
 ```bash
-./bids_setup/run_subjects.sh bids_setup/subjects.txt setup \
+./bids_setup/run_subjects.sh bids_setup/subjects_discovery.txt setup \
     --bids-root $BIDS_ROOT --iproc-dir $IPROC_DIR --dry-run
 ```
 
