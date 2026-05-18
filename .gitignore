@@ -1,3 +1,4 @@
 *.pyc
 __pycache__
 container/downloads/license.txt
+manifest_*.yaml
