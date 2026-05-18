@@ -68,6 +68,7 @@ FMAP_PHASE_RE = re.compile(
 ANAT_RE = re.compile(
     r"sub-(?P<sub>[^_]+)"
     r"_ses-(?P<ses>[^_]+)"
+    r"(?:_acq-(?P<acq>[^_]+))?"
     r"(?:_run-(?P<run>\d+))?"
     r"_T1w\.nii\.gz$"
 )
