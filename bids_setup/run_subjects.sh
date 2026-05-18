@@ -143,6 +143,8 @@ for sub in "${SUBJECTS[@]}"; do
             ${CONTAINER} \
             bash -c 'set -e && \
                      source /opt/iproc-venv/bin/activate && \
+                     export FREESURFER_HOME=/opt/freesurfer-6.0.0 && \
+                     source /opt/freesurfer-6.0.0/SetUpFreeSurfer.sh && \
                      cd ${IPROC_CODE} && \
                      pip install -e . 2>&1 | tail -1 && \
                      mkdir -p ${LOG_DIR} && \
