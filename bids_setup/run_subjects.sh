@@ -12,8 +12,8 @@
 #
 # Options:
 #   --bids-root PATH   BIDS dataset root (required for setup stage)
-#   --iproc-dir PATH   iProc installation directory (default: parent of this script)
-#   --container PATH   Path to iproc.sif (default: $SCRATCH/containers/iproc.sif)
+#   --iproc-dir PATH   iProc output directory (default: /scratch/users/logben/discovery_bids/derivatives/iproc; or $IPROC_DIR env)
+#   --container PATH   Path to iproc.sif (default: <iproc-code>/container/iproc.sif; or $CONTAINER env)
 #   --partition NAME   SLURM partition (default: normal)
 #   --time HH:MM:SS    Wall time (default: 04:00:00)
 #   --mem SIZE         Memory (default: 32G)
@@ -21,17 +21,17 @@
 #   --dry-run          Print sbatch commands without submitting
 #
 # Example:
-#   ./run_subjects.sh subjects.txt setup --bids-root /oak/.../discovery_BIDS_20250402
-#   ./run_subjects.sh subjects.txt bet
-#   ./run_subjects.sh subjects.txt unwarp_motioncorrect_align
+#   ./run_subjects.sh subjects_discovery.txt setup --bids-root /scratch/users/logben/discovery_bids
+#   ./run_subjects.sh subjects_discovery.txt bet
+#   ./run_subjects.sh subjects_discovery.txt unwarp_motioncorrect_align
 
 set -euo pipefail
 
 # ── Defaults ──
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IPROC_CODE="$(dirname "$SCRIPT_DIR")"
-IPROC_DIR="$IPROC_CODE"
-CONTAINER="${SCRATCH:-/scratch}/containers/iproc.sif"
+IPROC_DIR="${IPROC_DIR:-/scratch/users/logben/discovery_bids/derivatives/iproc}"
+CONTAINER="${CONTAINER:-${IPROC_CODE}/container/iproc.sif}"
 BIDS_ROOT=""
 PARTITION="normal"
 TIME="04:00:00"
