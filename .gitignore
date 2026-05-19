@@ -2,3 +2,6 @@
 __pycache__
 container/downloads/license.txt
 manifest_*.yaml
+manifest.yaml
+container/iproc.sif
+container/flirt.real

@@ -85,6 +85,16 @@ if [[ ! -f "$CONTAINER" ]] && [[ "$DRY_RUN" == "false" ]]; then
     exit 1
 fi
 
+# Extract real FLIRT binary if missing so the wrapper can call it.
+# Bind-mounted at /opt/.fsl_orig/flirt; the wrapper at /opt/fsl-5.0.10/bin/flirt
+# post-processes -omat output from C99 hex-float to decimal (FSL 5.0.10 bug).
+FLIRT_REAL="${IPROC_CODE}/container/flirt.real"
+if [[ ! -f "$FLIRT_REAL" ]] && [[ "$DRY_RUN" == "false" ]]; then
+    echo "Extracting real flirt binary from container to $FLIRT_REAL ..."
+    apptainer exec "$CONTAINER" cat /opt/fsl-5.0.10/bin/flirt > "$FLIRT_REAL"
+    chmod +x "$FLIRT_REAL"
+fi
+
 VALID_STAGES="setup bet unwarp_motioncorrect_align T1_warp_and_mask combine_and_apply_warp filter_and_project"
 if ! echo "$VALID_STAGES" | grep -qw "$STAGE"; then
     echo "ERROR: Invalid stage '$STAGE'"
@@ -139,7 +149,7 @@ for sub in "${SUBJECTS[@]}"; do
         --output=${LOG_DIR}/slurm_${STAGE}_%j.log \
         --error=${LOG_DIR}/slurm_${STAGE}_%j.err \
         --wrap=\"apptainer exec \
-            --bind /oak:/oak,/scratch:/scratch,${IPROC_CODE}/container/imagemagick-policy.xml:/etc/ImageMagick-6/policy.xml:ro \
+            --bind /oak:/oak,/scratch:/scratch,${IPROC_CODE}/container/imagemagick-policy.xml:/etc/ImageMagick-6/policy.xml:ro,${IPROC_CODE}/container/flirt_wrapper.sh:/opt/fsl-5.0.10/bin/flirt:ro,${IPROC_CODE}/container/flirt.real:/opt/.fsl_orig/flirt:ro \
             ${CONTAINER} \
             bash -c 'set -e && \
                      source /opt/iproc-venv/bin/activate && \
