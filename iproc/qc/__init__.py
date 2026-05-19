@@ -118,11 +118,17 @@ class qc_pdf_maker(object):
         self.script.append(append_cmd)
 
     def png_to_PDF(self):
-        # converts tableau png in page to pdf      
-        # sample usage: for page in pages: png_to_PDF(page,
+        # converts tableau png in page to pdf
+        # ImageMagick 'convert' can exit non-zero (policy warnings, font
+        # fallback, etc.) even when the output PDF was written successfully.
+        # Disable errexit around the convert, then assert the PDF exists
+        # and is non-empty as the actual success criterion.
         tableau_files = [page.tableau for page in self.pages]
+        self.script.append(['set', '+e'])
         combine_png_cmd = ['convert', '-adjoin'] + tableau_files + [self.out_pdf]
         self.script.append(combine_png_cmd)
+        self.script.append(['set', '-e'])
+        self.script.append(['test', '-s', self.out_pdf])
 
     def final_cleanup(self,save_intermediates):
         if save_intermediates:
