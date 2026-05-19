@@ -15,21 +15,29 @@ cp ${TARGDIR}/mpr_reorient_brain.nii.gz ${TARGDIR}/mpr_brain.nii.gz
 
 # Narrow the FLIRT search range.  -180 180 across all three axes searches
 # the entire rotation space, which finds bad local optima even when the
-# input is already RAS-aligned (as ours is after fslreorient2std).  The
-# bad affine then breaks FNIRT downstream with NEWMAT::SingularException.
+# input is already RAS-aligned (as ours is after fslreorient2std).
 # +-30 degrees is plenty for properly-oriented T1s.
 flirt -in ${TARGDIR}/mpr_brain -ref ${ATLASB} -out ${TARGDIR}/mpr_brain_mni -omat ${TARGDIR}/mpr_brain_to_mni.mat -bins 256 -cost corratio -searchrx -30 30 -searchry -30 30 -searchrz -30 30 -dof 12 -interp trilinear
 
-# FNIRT keeps crashing with NEWMAT::SingularException on our data (FSL
-# 5.0.10 + GE multi-echo T1 with R->L X-axis vs MNI L->R).  We use
-# convertwarp to produce an affine-only warp field instead.  Downstream
-# applywarp expects a NIfTI warp file at the same path, so create one
-# encoding the FLIRT affine plus identity displacement.  This gives
-# AFFINE-ONLY T1->MNI registration (no nonlinear refinement).
-convertwarp --ref=${ATLAS} --premat=${TARGDIR}/mpr_brain_to_mni.mat --out=${TARGDIR}/mpr_to_mni_FNIRT.mat.nii.gz
-# Produce iout (T1 in MNI space) via applywarp so downstream steps that
-# expect anat_mni_underlay.nii.gz find it.
-applywarp --ref=${ATLAS} --in=${TARGDIR}/mpr --warp=${TARGDIR}/mpr_to_mni_FNIRT.mat.nii.gz --out=${TARGDIR}/anat_mni_underlay
+# FLIRT 5.0.10 in our container writes the affine in C99 hex-float format
+# (e.g. 0x1.1abd7749c1773p+0).  The rest of FSL (fnirt, convertwarp,
+# convert_xfm, applywarp) parses this as 0.0, producing all-zero matrices
+# and NEWMAT::SingularException downstream.  Post-process to canonical
+# decimal so every downstream tool can read the affine.
+python3 -c "
+import sys
+with open('${TARGDIR}/mpr_brain_to_mni.mat') as f:
+    rows = [[float.fromhex(t) for t in line.split()] for line in f if line.strip()]
+with open('${TARGDIR}/mpr_brain_to_mni.mat', 'w') as f:
+    for row in rows:
+        f.write(' '.join(f'{v:.10f}' for v in row) + '\n')
+"
+
+# Nonlinear T1 -> MNI registration via FNIRT.  Uses FSL's standard config
+# (T1_2_MNI152_2mm.cnf) tuned for this exact registration.  Now that the
+# FLIRT affine is in decimal (see hex->decimal post-processing above),
+# FNIRT can parse it correctly.
+fnirt --in=${TARGDIR}/mpr --iout=${TARGDIR}/anat_mni_underlay --ref=${ATLAS} --refmask=${ATLASBM} --aff=${TARGDIR}/mpr_brain_to_mni.mat --cout=${TARGDIR}/mpr_to_mni_FNIRT.mat --config=T1_2_MNI152_2mm
 
 invwarp -w ${TARGDIR}/mpr_to_mni_FNIRT.mat.nii.gz -o ${invwarp_out} -r ${TARGDIR}/mpr
 
