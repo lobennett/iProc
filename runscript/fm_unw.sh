@@ -30,8 +30,14 @@ fslmaths $IMG prefiltered_func_data
 fmap=$FDIR/${FM_SESS}_${FM_BOLDNO}_fieldmap 
 mag_img=$FDIR/mag_img
 
-# copped from HCP. Check that what we're trying to unwarp is the same dimensions as our unwarp image.
-test "$(fslhd $mag_img | grep '^dim[123]')" == "$(fslhd $IMG | grep '^dim[123]')"
+# The HCP-derived dim check was too strict: GE acquisitions often have fmap
+# and BOLD at different in-plane resolution (e.g. 128x128x60 fmap vs 80x80x51
+# BOLD).  The FLIRT step below (line ~77) resamples the fmap into BOLD space
+# via the linear transform, so equal dimensions are not required for the math.
+# Keep a warning instead of a hard fail.
+if [[ "$(fslhd $mag_img | grep '^dim[123]')" != "$(fslhd $IMG | grep '^dim[123]')" ]]; then
+    echo "INFO: fmap mag_img and BOLD reference have different dims; FLIRT will resample."
+fi
 
 fslmaths $fmap FM_UD_fmap
 fslmaths ${mag_img} FM_UD_fmap_mag
