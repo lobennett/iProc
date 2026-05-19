@@ -268,7 +268,7 @@ BASEDIR={basedir}
 OUTDIR=${{basedir}}/mri_data
 LOGDIR=${{outdir}}/${{sub}}/logs
 SCRATCHDIR=${{basedir}}/scratch/
-MASKSDIR=${{basedir}}/mni_masks
+MASKSDIR=${{iproc:codedir}}/mni_masks
 FONT=DejaVu-Sans
 CODEDIR={codedir}
 
