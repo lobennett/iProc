@@ -13,7 +13,12 @@ SESST=${6}
 # to MNI152 (NEWMAT::SingularException).  Just copy through.
 cp ${TARGDIR}/mpr_reorient_brain.nii.gz ${TARGDIR}/mpr_brain.nii.gz
 
-flirt -in ${TARGDIR}/mpr_brain -ref ${ATLASB} -out ${TARGDIR}/mpr_brain_mni -omat ${TARGDIR}/mpr_brain_to_mni.mat -bins 256 -cost corratio -searchrx -180 180 -searchry -180 180 -searchrz -180 180 -dof 12 -interp trilinear
+# Narrow the FLIRT search range.  -180 180 across all three axes searches
+# the entire rotation space, which finds bad local optima even when the
+# input is already RAS-aligned (as ours is after fslreorient2std).  The
+# bad affine then breaks FNIRT downstream with NEWMAT::SingularException.
+# +-30 degrees is plenty for properly-oriented T1s.
+flirt -in ${TARGDIR}/mpr_brain -ref ${ATLASB} -out ${TARGDIR}/mpr_brain_mni -omat ${TARGDIR}/mpr_brain_to_mni.mat -bins 256 -cost corratio -searchrx -30 30 -searchry -30 30 -searchrz -30 30 -dof 12 -interp trilinear
 
 # Use FSL's standard T1->MNI152 FNIRT config.  Without --config, FNIRT
 # uses internal defaults that are more aggressive and prone to numerical
