@@ -20,12 +20,16 @@ cp ${TARGDIR}/mpr_reorient_brain.nii.gz ${TARGDIR}/mpr_brain.nii.gz
 # +-30 degrees is plenty for properly-oriented T1s.
 flirt -in ${TARGDIR}/mpr_brain -ref ${ATLASB} -out ${TARGDIR}/mpr_brain_mni -omat ${TARGDIR}/mpr_brain_to_mni.mat -bins 256 -cost corratio -searchrx -30 30 -searchry -30 30 -searchrz -30 30 -dof 12 -interp trilinear
 
-# Use FSL's standard T1->MNI152 FNIRT config.  Without --config, FNIRT
-# uses internal defaults that are more aggressive and prone to numerical
-# instability (we hit NEWMAT::SingularException on s10).  The packaged
-# T1_2_MNI152_2mm.cnf tunes subsampling, miter, and regularization for
-# this exact registration.
-fnirt --in=${TARGDIR}/mpr --iout=${TARGDIR}/anat_mni_underlay --ref=${ATLAS} --refmask=${ATLASBM} --aff=${TARGDIR}/mpr_brain_to_mni.mat --cout=${TARGDIR}/mpr_to_mni_FNIRT.mat --config=T1_2_MNI152_2mm
+# FNIRT keeps crashing with NEWMAT::SingularException on our data (FSL
+# 5.0.10 + GE multi-echo T1 with R->L X-axis vs MNI L->R).  We use
+# convertwarp to produce an affine-only warp field instead.  Downstream
+# applywarp expects a NIfTI warp file at the same path, so create one
+# encoding the FLIRT affine plus identity displacement.  This gives
+# AFFINE-ONLY T1->MNI registration (no nonlinear refinement).
+convertwarp --ref=${ATLAS} --premat=${TARGDIR}/mpr_brain_to_mni.mat --out=${TARGDIR}/mpr_to_mni_FNIRT.mat.nii.gz
+# Produce iout (T1 in MNI space) via applywarp so downstream steps that
+# expect anat_mni_underlay.nii.gz find it.
+applywarp --ref=${ATLAS} --in=${TARGDIR}/mpr --warp=${TARGDIR}/mpr_to_mni_FNIRT.mat.nii.gz --out=${TARGDIR}/anat_mni_underlay
 
 invwarp -w ${TARGDIR}/mpr_to_mni_FNIRT.mat.nii.gz -o ${invwarp_out} -r ${TARGDIR}/mpr
 
