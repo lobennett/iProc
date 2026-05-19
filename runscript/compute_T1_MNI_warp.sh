@@ -7,8 +7,11 @@ ATLASB=${4}
 ATLASBM=${5}
 SESST=${6}
 
-#TODO: should this be there?
-fslswapdim ${TARGDIR}/mpr_reorient_brain.nii.gz x -z y ${TARGDIR}/mpr_brain.nii.gz
+# Upstream iProc swapped dims here for HCP convention; for our BIDS data
+# fslreorient2std has already standardized to RAS+, so swapping again
+# rotates the head 90° into a non-RAS orientation that FNIRT can't align
+# to MNI152 (NEWMAT::SingularException).  Just copy through.
+cp ${TARGDIR}/mpr_reorient_brain.nii.gz ${TARGDIR}/mpr_brain.nii.gz
 
 flirt -in ${TARGDIR}/mpr_brain -ref ${ATLASB} -out ${TARGDIR}/mpr_brain_mni -omat ${TARGDIR}/mpr_brain_to_mni.mat -bins 256 -cost corratio -searchrx -180 180 -searchry -180 180 -searchrz -180 180 -dof 12 -interp trilinear
 
