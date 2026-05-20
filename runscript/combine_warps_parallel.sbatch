@@ -35,7 +35,10 @@ if [ -d $temp_save_dir ];then
     mv $temp_save_dir $old_temp_save_dir
 fi
 mkdir $temp_save_dir
-rsync -av --remove-source-files $SCRATCHDIR/ $temp_save_dir/
+# rsync isn't in the iproc container; use mv + rmdir to mimic
+# `rsync -av --remove-source-files` then cleanup the now-empty scratch dir.
+mv $SCRATCHDIR/* $temp_save_dir/
+rmdir $SCRATCHDIR
 
 if [ -n "$rmfiles" ]; then
     for f in $rmfiles;do
