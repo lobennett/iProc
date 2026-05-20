@@ -5,3 +5,4 @@ manifest_*.yaml
 manifest.yaml
 container/iproc.sif
 container/flirt.real
+container/convert_xfm.real
