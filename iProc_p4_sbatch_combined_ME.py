@@ -224,7 +224,15 @@ logger.info(f'there are {cpus} processors available to this task')
 
 ##merge the linear and nonlinear warps
 ## for ~400 individual files
-volnums = [str(n) for n in range(int(args.numvol))]
+# Derive the volume count from the motion-correction matrices that actually
+# exist (mcflirt writes one MAT_NNNN per acquired volume), not the per-task
+# cfg --numvol. The cfg carries one NUMVOL per task type, valid only for
+# fixed-length acquisitions; for variable-length task runs it caps warp
+# generation below the real volume count and applywarp then fails on the
+# missing warps for the trailing volumes. The MAT files are the authoritative
+# per-scan count; for fixed-length data this equals range(int(args.numvol)).
+mat_present = sorted(f for f in os.listdir(args.mat_dir) if re.fullmatch(r'MAT_\d{4}', f))
+volnums = [str(int(f.split('_')[1])) for f in mat_present]
 out_file_names = ['MAT_{}'.format(n.zfill(4)) for n in volnums]
 matfiles = [os.path.join(args.mat_dir, f) for f in out_file_names]
 matfiles_exist = {f:os.path.exists(f) for f in matfiles}

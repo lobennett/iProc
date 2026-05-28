@@ -26,6 +26,16 @@ rmfiles=${21:-''}
 
 MIDVOL_UNWARP=${MIDVOL}_unwarp
 
+# Use the true per-scan volume count from the data rather than the cfg NUMVOL.
+# iProc's tasktype cfg carries ONE NUMVOL per task type, which is only valid
+# when every run of a task has identical length (true for fixed-length rest
+# acquisitions, false for variable-length task runs). A mismatched NUMVOL
+# corrupts midvol selection (NUMVOL/2), the outlier percentage, the outlier
+# matrix dimensions, and the motion regressors (p2a.sh tail -n NUMVOL). fslnvols
+# is the authoritative count and makes every downstream use self-correcting.
+# For genuinely fixed-length data this is a no-op (fslnvols == cfg NUMVOL).
+NUMVOL=$(fslnvols ${MC_IN})
+
 ### ALL NEW UNTESTED BELOW #####
 ## only fd & then getting specific volume to be used and adding that to the filename rather than FINAL - so we can use that specific volume below
 
